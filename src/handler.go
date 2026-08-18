@@ -29,9 +29,9 @@ import (
 	"net/http"
 	"net/smtp"
 	"os"
-	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -60,7 +60,9 @@ type BucketData struct {
 var redis_client *redis.Client
 var postgres_client *sql.DB
 var ips map[string]BucketData
+var ipsLock *sync.Mutex
 var captchaTokens map[string]CaptchData
+var captchaTokensLock *sync.Mutex
 var users map[string]slide.CaptData
 var auth smtp.Auth
 
@@ -117,16 +119,33 @@ func main() {
 	memoryTicker := time.NewTicker(5 * time.Minute)
 	go func() {
 		<-memoryTicker.C
-		for k, v := range ips {
+		changed1 := false
+		copyIps := ips
+		for k, v := range copyIps {
 			if (time.Now().Unix() - v.timestamp) > 1800 {
-				ips[k] = BucketData{}
+				changed1 = true
+				copyIps[k] = BucketData{timestamp: time.Now().Unix()}
 			}
 		}
-		for k, v := range captchaTokens {
+		if changed1 {
+			ipsLock.Lock()
+			ips = copyIps
+			ipsLock.Unlock()
+		}
+		copyCaptchaTokens := captchaTokens
+		changed := false
+		for k, v := range copyCaptchaTokens {
 			if (time.Now().Unix() - v.timestamp) > 600 {
-				captchaTokens[k] = CaptchData{}
+				changed = true
+				copyCaptchaTokens[k] = CaptchData{timestamp: time.Now().Unix()}
 			}
 		}
+		if changed {
+			captchaTokensLock.Lock()
+			captchaTokens = copyCaptchaTokens
+			captchaTokensLock.Unlock()
+		}
+
 	}()
 	server := &http.Server{
 		Handler:      rrouter,
@@ -141,34 +160,26 @@ func main() {
 
 func bucketHandlement(w http.ResponseWriter, r *http.Request) {
 	dip := r.Header.Get("realip")
-	if reflect.ValueOf(ips[dip]).IsZero() {
+	ipsLock.Lock()
+	if len(ips[dip].tokens) == 0 && (time.Now().Unix()-ips[dip].timestamp) < 1800 {
 		ips[dip] = generateBucket(rnd.IntN(50) + 20)
+	} else {
+		ipsLock.Unlock()
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Bad request"))
+		return
 	}
 	bucket := ips[dip].tokens
 	length := len(bucket)
-	if (time.Now().Unix() - ips[dip].timestamp) > 1800 {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("Please request again for new tokens"))
-		return
-	}
-	if length != 0 && length != 1 {
-		w.WriteHeader(http.StatusAccepted)
-		w.Write([]byte(bucket[length-1]))
+	if length != 0 {
 		if len(ips[dip].tokens) == 0 {
-			ips[dip] = BucketData{tokens: []string{fmt.Sprint(time.Now().Unix())}, timestamp: ips[dip].timestamp} // this is for when we wanna put timeout for user requests
+			ips[dip] = BucketData{tokens: []string{}, timestamp: ips[dip].timestamp}
 		} else {
 			ips[dip] = BucketData{tokens: bucket[:length-1], timestamp: time.Now().Unix()}
 		}
-	} else if length == 1 {
-		converted, _ := strconv.Atoi(ips[dip].tokens[0])
-		if (time.Now().Unix() - int64(converted)) > 300 {
-			ips[dip] = generateBucket(rnd.IntN(50) + 20)
-			w.WriteHeader(http.StatusAccepted)
-			w.Write([]byte("New tokens"))
-		} else {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("timeout, you have to wait"))
-		}
+		ipsLock.Unlock()
+		w.WriteHeader(http.StatusAccepted)
+		w.Write([]byte(bucket[length-1]))
 	}
 }
 
@@ -187,22 +198,29 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 		dip := r.Header.Get("realip")
 
+		ipsLock.Lock()
 		bucket := ips[dip].tokens
+		ipsLock.Unlock()
 		length := len(bucket)
 
 		for i := length - 1; i >= 0; i-- {
 			if bucket[i] == token {
+				ipsLock.Lock()
 				ips[dip] = BucketData{tokens: bucket[:length-1], timestamp: time.Now().Unix()}
+				ipsLock.Unlock()
 				// this means this is accepted and we can continue the operation
 				break
 			}
 		}
+		ipsLock.Lock()
 		if len(ips[dip].tokens) == length {
+			ipsLock.Unlock()
 			// it means token was invalid
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
 		}
+		ipsLock.Unlock()
 
 		captchaD := payload.Get("captchaToken")
 		var captchaData map[string]string
@@ -279,7 +297,9 @@ func register(w http.ResponseWriter, r *http.Request) {
 
 		dip := r.Header.Get("realip")
 
+		ipsLock.Lock()
 		bucket := ips[dip].tokens
+		ipsLock.Unlock()
 		length := len(bucket)
 
 		for i := length - 1; i >= 0; i-- {
@@ -289,13 +309,15 @@ func register(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 		}
+		ipsLock.Lock()
 		if len(ips[dip].tokens) == length {
+			ipsLock.Unlock()
 			// it means token was invalid
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
 		}
-
+		ipsLock.Unlock()
 		captchaD := payload.Get("captchaToken")
 		var captchaData map[string]string
 		if captchaD != "" {
@@ -370,7 +392,9 @@ func CaptchaGeneration(verification string, username string, password string, em
 		}
 		jsonedBuffer, _ := json.Marshal(jsoned)
 		// we should have store the answer in some storage,
+		captchaTokensLock.Lock()
 		captchaTokens[dip] = CaptchData{x: captData.GetData().X, y: captData.GetData().Y, timestamp: time.Now().Unix()}
+		captchaTokensLock.Unlock()
 		w.WriteHeader(http.StatusAccepted)
 		w.Write(jsonedBuffer)
 		return
@@ -393,8 +417,10 @@ func CaptchaToken(captchaD string, captchaData map[string]string, w http.Respons
 			return
 		}
 
+		captchaTokensLock.Lock()
 		if (time.Now().Unix() - captchaTokens[dip].timestamp) < 600 {
 			if (captchaData["x"] == "" || captchaData["y"] == "") && captchaData["token"] != captchaTokens[dip].token {
+				captchaTokensLock.Unlock()
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write([]byte("Bad request"))
 				return
@@ -404,11 +430,18 @@ func CaptchaToken(captchaD string, captchaData map[string]string, w http.Respons
 				rand.Read(buff)
 				tok := hex.EncodeToString(buff)
 				captchaTokens[dip] = CaptchData{token: tok, timestamp: time.Now().Unix()}
+				captchaTokensLock.Unlock()
 				w.WriteHeader(http.StatusAccepted)
+				return
+			} else {
+				captchaTokensLock.Unlock()
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte("Bad request"))
 				return
 			}
 		} else {
 			captchaTokens[dip] = CaptchData{}
+			captchaTokensLock.Unlock()
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -438,7 +471,9 @@ func Verify(verification string, password string, email string, dip string, w ht
 			w.Write([]byte("Problem with sending email to you happened in server"))
 			return
 		}
+		captchaTokensLock.Lock()
 		captchaTokens[dip] = CaptchData{verification: vcode, timestamp: time.Now().Unix()}
+		captchaTokensLock.Unlock()
 	} else {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("Bad request"))
@@ -449,7 +484,9 @@ func Verify(verification string, password string, email string, dip string, w ht
 func Authing(username string, email string, password string, verification string, dip string, w http.ResponseWriter, registery bool) {
 	if vercode, erro := strconv.Atoi(verification); erro != nil {
 		// in this case user received the code and its on the header now
+		captchaTokensLock.Lock()
 		if captchaTokens[dip].verification != vercode {
+			captchaTokensLock.Unlock()
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
