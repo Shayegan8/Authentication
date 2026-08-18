@@ -120,7 +120,9 @@ func main() {
 	go func() {
 		<-memoryTicker.C
 		changed1 := false
+		ipsLock.Lock()
 		copyIps := ips
+		ipsLock.Unlock()
 		for k, v := range copyIps {
 			if (time.Now().Unix() - v.timestamp) > 1800 {
 				changed1 = true
@@ -132,7 +134,9 @@ func main() {
 			ips = copyIps
 			ipsLock.Unlock()
 		}
+		captchaTokensLock.Lock()
 		copyCaptchaTokens := captchaTokens
+		captchaTokensLock.Unlock()
 		changed := false
 		for k, v := range copyCaptchaTokens {
 			if (time.Now().Unix() - v.timestamp) > 600 {
