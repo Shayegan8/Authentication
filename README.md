@@ -5,6 +5,6 @@ It uses Bucket limit system, give users a refresh token after passing all levels
 api endpoints in further development will give them a jwt token with this refresh token. refresh token will be changed after each login and it will have a timestamp 
 
 TODO:
-- Add change username/password logic
+- Add username/password adjustment logic
 - Supporting OAuth2 too
 - Delete account logic
