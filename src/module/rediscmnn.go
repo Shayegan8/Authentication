@@ -1,15 +1,15 @@
 package module
 
 import (
-	"myblog"
+	"os"
 
 	"github.com/redis/go-redis/v9"
 )
 
 func InitRDB() *redis.Client {
-	opt, err := redis.ParseURL(myblog.Config["redis"])
-	if err != nil {
-		panic(err)
-	}
-	return redis.NewClient(opt)
+	return redis.NewClient(&redis.Options{
+		Network:  "unix",
+		Addr:     os.ExpandEnv("$HOME/redissock.sock"), // the permission for this file should be 400 and this apis are getting run with systemd/docker images by sudo user itself
+		PoolSize: 30,
+	})
 }
