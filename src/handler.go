@@ -92,14 +92,14 @@ func Init() slide.Captcha {
 	return builder.Make()
 }
 
-func generateBucket(n int) BucketData {
+func generateBucket(n int) []string {
 	var arr []string = make([]string, n)
 	for i := range len(arr) {
 		var buffer []byte = make([]byte, 10)
 		rand.Read(buffer)
 		arr[i] = hex.EncodeToString(buffer)
 	}
-	return BucketData{tokens: arr, timestamp: time.Now().Unix()}
+	return arr
 }
 
 func main() {
@@ -109,8 +109,8 @@ func main() {
 	router := mux.NewRouter()
 
 	auth = smtp.PlainAuth("", myblog.Config["user"], myblog.Config["password"], "smtp.gmail.com")
-	router.HandleFunc("/login", register)
-	router.HandleFunc("/register", login)
+	router.HandleFunc("/login", login)
+	router.HandleFunc("/register", register)
 	rrouter := handlers.LoggingHandler(os.Stdout, router)
 
 	server := &http.Server{
@@ -127,13 +127,6 @@ func main() {
 func bucketHandlement(w http.ResponseWriter, r *http.Request) {
 	dip := r.Header.Get("realip")
 	keys, err1 := redis_client.Exists(context.Background(), dip).Result()
-	length, err := redis_client.HLen(context.Background(), dip).Result()
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Server error"))
-		return
-	}
-
 	if err1 != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Server error"))
@@ -142,45 +135,32 @@ func bucketHandlement(w http.ResponseWriter, r *http.Request) {
 	if keys == 0 {
 		redis_pipe := redis_client.Pipeline()
 		buckdat := generateBucket(rnd.IntN(50) + 20)
-		redis_pipe.HSet(context.Background(), dip, buckdat)
+		redis_pipe.LPush(context.Background(), dip, buckdat)
 		redis_pipe.Expire(context.Background(), dip, 5*time.Minute)
 		redis_pipe.Exec(context.Background())
+		token, err := redis_client.RPop(context.Background(), dip).Result()
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		}
+
 		w.WriteHeader(http.StatusAccepted)
-		w.Write([]byte(buckdat.tokens[length-1]))
-		return
+		w.Write([]byte(token))
 	} else {
-		if length != 0 {
-			var buckdat BucketData
-			err2 := redis_client.HGetAll(context.Background(), dip).Scan(&buckdat)
-			if err2 != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte("Server error"))
-				return
-			}
-			if len(buckdat.tokens) == 0 {
+		token, err := redis_client.RPop(context.Background(), dip).Result()
+		if err != nil {
+			if err == redis.Nil {
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write([]byte("Bad request"))
 				return
 			}
-		} // well length cant be 0 unless the key dosent exist which is checked in upper clause
-	}
-	var buckdat BucketData
-	err2 := redis_client.HGetAll(context.Background(), dip).Scan(&buckdat)
-	if err2 != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Server error"))
-		return
-	}
-
-	if length != 0 {
-		if len(buckdat.tokens) == 0 {
-			redis_client.HSet(context.Background(), dip, BucketData{tokens: []string{}, timestamp: buckdat.timestamp})
-		} else {
-			redis_client.HSet(context.Background(), dip, BucketData{tokens: buckdat.tokens[:length-1], timestamp: time.Now().Unix()})
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
 		}
 		w.WriteHeader(http.StatusAccepted)
-		w.Write([]byte(buckdat.tokens[length-1]))
-		return
+		w.Write([]byte(token))
 	}
 }
 
@@ -199,33 +179,9 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 		dip := r.Header.Get("realip")
 
-		var buckdat BucketData
-		err := redis_client.HGetAll(context.Background(), dip).Scan(&buckdat)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-			return
-		}
-		bucket := buckdat.tokens
-		length := len(bucket)
+		_, err := redis_client.LPos(context.Background(), dip, token, redis.LPosArgs{MaxLen: 1}).Result()
 
-		for i := length - 1; i >= 0; i-- {
-			if bucket[i] == token {
-				redis_client.HSet(context.Background(), dip, BucketData{tokens: bucket[:length-1], timestamp: time.Now().Unix()})
-				// this means this is accepted and we can continue the operation
-				break
-			}
-		}
-		var forHlength BucketData
-		err2 := redis_client.HGetAll(context.Background(), dip).Scan(&forHlength)
-		if err2 != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-			return
-		}
-
-		if len(forHlength.tokens) == length {
-			// it means token was invalid
+		if err == nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -306,38 +262,14 @@ func register(w http.ResponseWriter, r *http.Request) {
 
 		dip := r.Header.Get("realip")
 
-		var buckdat BucketData
-		err := redis_client.HGetAll(context.Background(), dip).Scan(&buckdat)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-			return
-		}
-		bucket := buckdat.tokens
-		length := len(bucket)
+		_, err := redis_client.LPos(context.Background(), dip, token, redis.LPosArgs{MaxLen: 1}).Result()
 
-		for i := length - 1; i >= 0; i-- {
-			if bucket[i] == token {
-				redis_client.HSet(context.Background(), dip, BucketData{tokens: bucket[:length-1], timestamp: time.Now().Unix()})
-				// this means this is accepted and we can continue the operation
-				break
-			}
-		}
-
-		var forHlength BucketData
-		err2 := redis_client.HGetAll(context.Background(), dip).Scan(&forHlength)
-		if err2 != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-			return
-		}
-
-		if len(forHlength.tokens) == length {
-			// it means token was invalid
+		if err == nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
 		}
+
 		captchaD := payload.Get("captchaToken")
 		var captchaData map[string]string
 		if captchaD != "" {
