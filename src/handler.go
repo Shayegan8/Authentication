@@ -16,6 +16,7 @@ and tunnel them with a reverse proxy (ngnix)
 */
 
 import (
+	"context"
 	"crypto/rand"
 	"database/sql"
 	_ "embed"
@@ -59,8 +60,6 @@ type BucketData struct {
 
 var redis_client *redis.Client
 var postgres_client *sql.DB
-var ips map[string]BucketData
-var ipsLock *sync.Mutex
 var captchaTokens map[string]CaptchData
 var captchaTokensLock *sync.Mutex
 var users map[string]slide.CaptData
@@ -105,9 +104,7 @@ func generateBucket(n int) BucketData {
 
 func main() {
 	json.Unmarshal(myblog.ConfigBuffer, &myblog.Config)
-	/*
-		redis_client = module.InitRDB()
-	*/
+	redis_client = module.InitRDB()
 	postgres_client = module.InitPDB()
 	router := mux.NewRouter()
 
@@ -116,41 +113,6 @@ func main() {
 	router.HandleFunc("/register", login)
 	rrouter := handlers.LoggingHandler(os.Stdout, router)
 
-	memoryTicker := time.NewTicker(5 * time.Minute)
-	go func() {
-		<-memoryTicker.C
-		changed1 := false
-		ipsLock.Lock()
-		copyIps := ips
-		ipsLock.Unlock()
-		for k, v := range copyIps {
-			if (time.Now().Unix() - v.timestamp) > 1800 {
-				changed1 = true
-				copyIps[k] = BucketData{timestamp: time.Now().Unix()}
-			}
-		}
-		if changed1 {
-			ipsLock.Lock()
-			ips = copyIps
-			ipsLock.Unlock()
-		}
-		captchaTokensLock.Lock()
-		copyCaptchaTokens := captchaTokens
-		captchaTokensLock.Unlock()
-		changed := false
-		for k, v := range copyCaptchaTokens {
-			if (time.Now().Unix() - v.timestamp) > 600 {
-				changed = true
-				copyCaptchaTokens[k] = CaptchData{timestamp: time.Now().Unix()}
-			}
-		}
-		if changed {
-			captchaTokensLock.Lock()
-			captchaTokens = copyCaptchaTokens
-			captchaTokensLock.Unlock()
-		}
-
-	}()
 	server := &http.Server{
 		Handler:      rrouter,
 		Addr:         "127.0.0.1:1234",
@@ -164,26 +126,61 @@ func main() {
 
 func bucketHandlement(w http.ResponseWriter, r *http.Request) {
 	dip := r.Header.Get("realip")
-	ipsLock.Lock()
-	if len(ips[dip].tokens) == 0 && (time.Now().Unix()-ips[dip].timestamp) < 1800 {
-		ips[dip] = generateBucket(rnd.IntN(50) + 20)
-	} else {
-		ipsLock.Unlock()
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("Bad request"))
+	keys, err1 := redis_client.Exists(context.Background(), dip).Result()
+	length, err := redis_client.HLen(context.Background(), dip).Result()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Server error"))
 		return
 	}
-	bucket := ips[dip].tokens
-	length := len(bucket)
-	if length != 0 {
-		if len(ips[dip].tokens) == 0 {
-			ips[dip] = BucketData{tokens: []string{}, timestamp: ips[dip].timestamp}
-		} else {
-			ips[dip] = BucketData{tokens: bucket[:length-1], timestamp: time.Now().Unix()}
-		}
-		ipsLock.Unlock()
+
+	if err1 != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Server error"))
+		return
+	}
+	if keys == 0 {
+		redis_pipe := redis_client.Pipeline()
+		buckdat := generateBucket(rnd.IntN(50) + 20)
+		redis_pipe.HSet(context.Background(), dip, buckdat)
+		redis_pipe.Expire(context.Background(), dip, 5*time.Minute)
+		redis_pipe.Exec(context.Background())
 		w.WriteHeader(http.StatusAccepted)
-		w.Write([]byte(bucket[length-1]))
+		w.Write([]byte(buckdat.tokens[length-1]))
+		return
+	} else {
+		if length != 0 {
+			var buckdat BucketData
+			err2 := redis_client.HGetAll(context.Background(), dip).Scan(&buckdat)
+			if err2 != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("Server error"))
+				return
+			}
+			if len(buckdat.tokens) == 0 {
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte("Bad request"))
+				return
+			}
+		} // well length cant be 0 unless the key dosent exist which is checked in upper clause
+	}
+	var buckdat BucketData
+	err2 := redis_client.HGetAll(context.Background(), dip).Scan(&buckdat)
+	if err2 != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Server error"))
+		return
+	}
+
+	if length != 0 {
+		if len(buckdat.tokens) == 0 {
+			redis_client.HSet(context.Background(), dip, BucketData{tokens: []string{}, timestamp: buckdat.timestamp})
+		} else {
+			redis_client.HSet(context.Background(), dip, BucketData{tokens: buckdat.tokens[:length-1], timestamp: time.Now().Unix()})
+		}
+		w.WriteHeader(http.StatusAccepted)
+		w.Write([]byte(buckdat.tokens[length-1]))
+		return
 	}
 }
 
@@ -196,35 +193,43 @@ func login(w http.ResponseWriter, r *http.Request) {
 		token := payload.Get("token") // generated token from bucket
 		if token == "" {
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("You have to use token"))
+			w.Write([]byte("Bad request"))
 			return
 		}
 
 		dip := r.Header.Get("realip")
 
-		ipsLock.Lock()
-		bucket := ips[dip].tokens
-		ipsLock.Unlock()
+		var buckdat BucketData
+		err := redis_client.HGetAll(context.Background(), dip).Scan(&buckdat)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		}
+		bucket := buckdat.tokens
 		length := len(bucket)
 
 		for i := length - 1; i >= 0; i-- {
 			if bucket[i] == token {
-				ipsLock.Lock()
-				ips[dip] = BucketData{tokens: bucket[:length-1], timestamp: time.Now().Unix()}
-				ipsLock.Unlock()
+				redis_client.HSet(context.Background(), dip, BucketData{tokens: bucket[:length-1], timestamp: time.Now().Unix()})
 				// this means this is accepted and we can continue the operation
 				break
 			}
 		}
-		ipsLock.Lock()
-		if len(ips[dip].tokens) == length {
-			ipsLock.Unlock()
+		var forHlength BucketData
+		err2 := redis_client.HGetAll(context.Background(), dip).Scan(&forHlength)
+		if err2 != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		}
+
+		if len(forHlength.tokens) == length {
 			// it means token was invalid
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
 		}
-		ipsLock.Unlock()
 
 		captchaD := payload.Get("captchaToken")
 		var captchaData map[string]string
@@ -301,27 +306,38 @@ func register(w http.ResponseWriter, r *http.Request) {
 
 		dip := r.Header.Get("realip")
 
-		ipsLock.Lock()
-		bucket := ips[dip].tokens
-		ipsLock.Unlock()
+		var buckdat BucketData
+		err := redis_client.HGetAll(context.Background(), dip).Scan(&buckdat)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		}
+		bucket := buckdat.tokens
 		length := len(bucket)
 
 		for i := length - 1; i >= 0; i-- {
 			if bucket[i] == token {
-				ips[dip] = BucketData{tokens: bucket[:length-1], timestamp: time.Now().Unix()}
+				redis_client.HSet(context.Background(), dip, BucketData{tokens: bucket[:length-1], timestamp: time.Now().Unix()})
 				// this means this is accepted and we can continue the operation
 				break
 			}
 		}
-		ipsLock.Lock()
-		if len(ips[dip].tokens) == length {
-			ipsLock.Unlock()
+
+		var forHlength BucketData
+		err2 := redis_client.HGetAll(context.Background(), dip).Scan(&forHlength)
+		if err2 != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		}
+
+		if len(forHlength.tokens) == length {
 			// it means token was invalid
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
 		}
-		ipsLock.Unlock()
 		captchaD := payload.Get("captchaToken")
 		var captchaData map[string]string
 		if captchaD != "" {
