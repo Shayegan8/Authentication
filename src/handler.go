@@ -16,7 +16,6 @@ and tunnel them with a reverse proxy (ngnix)
 */
 
 import (
-	"context"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
@@ -135,10 +134,10 @@ func main() {
 
 func bucketHandlement(w http.ResponseWriter, r *http.Request) {
 	dip := r.Header.Get("realip")
-	token, err := redis_client.RPop(context.Background(), dip).Result()
+	token, err := redis_client.RPop(r.Context(), dip).Result()
 	if err == redis.Nil {
 
-		counter, err := redis_client.Incr(context.Background(), "counter"+dip).Result()
+		counter, err := redis_client.Incr(r.Context(), "counter"+dip).Result()
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
@@ -146,7 +145,7 @@ func bucketHandlement(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if counter == 1 {
-			redis_client.Expire(context.Background(), "counter"+dip, 30*time.Second)
+			redis_client.Expire(r.Context(), "counter"+dip, 30*time.Second)
 		}
 
 		if counter > 10 {
@@ -161,10 +160,10 @@ func bucketHandlement(w http.ResponseWriter, r *http.Request) {
 		for k, v := range buckdat {
 			buckdatInterfaces[k] = v
 		}
-		redis_pipe.LPush(context.Background(), dip, buckdatInterfaces...)
-		redis_pipe.Expire(context.Background(), dip, 5*time.Minute)
-		redis_pipe.Exec(context.Background())
-		token, err := redis_client.RPop(context.Background(), dip).Result()
+		redis_pipe.LPush(r.Context(), dip, buckdatInterfaces...)
+		redis_pipe.Expire(r.Context(), dip, 5*time.Minute)
+		redis_pipe.Exec(r.Context())
+		token, err := redis_client.RPop(r.Context(), dip).Result()
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
@@ -179,7 +178,7 @@ func bucketHandlement(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Server error"))
 			return
 		}
-		result, err := redis_client.LIndex(context.Background(), dip, -1).Result()
+		result, err := redis_client.LIndex(r.Context(), dip, -1).Result()
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
@@ -193,14 +192,14 @@ func bucketHandlement(w http.ResponseWriter, r *http.Request) {
 		}
 		w.WriteHeader(http.StatusAccepted)
 		w.Write([]byte(token))
-		length, err := redis_client.LLen(context.Background(), dip).Result()
+		length, err := redis_client.LLen(r.Context(), dip).Result()
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
 			return
 		}
 		if length == 0 {
-			redis_client.LPush(context.Background(), dip, "in-queue")
+			redis_client.LPush(r.Context(), dip, "in-queue")
 		}
 	}
 }
@@ -220,7 +219,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 		dip := r.Header.Get("realip")
 
-		removed, err := redis_client.LRem(context.Background(), dip, 1, token).Result()
+		removed, err := redis_client.LRem(r.Context(), dip, 1, token).Result()
 
 		if err != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -235,7 +234,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 		verification := payload.Get("verification")
 		password := payload.Get("password")
 		email := payload.Get("email") // for login email field can be either username or email
-		CaptchaGeneration(verification, email, password, email, dip, w)
+		CaptchaGeneration(verification, email, password, email, dip, w, r)
 		captchaD := payload.Get("captchaToken")
 		var captchaData map[string]string
 		if captchaD != "" {
@@ -246,7 +245,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		CaptchaToken(captchaD, captchaData, w, dip)
+		CaptchaToken(captchaD, captchaData, w, dip, r)
 
 		sig := payload.Get("signature")
 		tok := payload.Get("jwtAnswer")
@@ -320,8 +319,8 @@ func login(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		Verify(verification, password, email, dip, w)
-		Authing(email, email, password, verification, dip, w, false)
+		Verify(verification, password, email, dip, w, r)
+		Authing(email, email, password, verification, dip, w, r, false)
 	}
 }
 
@@ -340,7 +339,7 @@ func register(w http.ResponseWriter, r *http.Request) {
 
 		dip := r.Header.Get("realip")
 
-		removed, err := redis_client.LRem(context.Background(), dip, 1, token).Result()
+		removed, err := redis_client.LRem(r.Context(), dip, 1, token).Result()
 
 		if err != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -357,7 +356,7 @@ func register(w http.ResponseWriter, r *http.Request) {
 		password := payload.Get("password")
 		email := payload.Get("email")
 
-		CaptchaGeneration(verification, username, password, email, dip, w)
+		CaptchaGeneration(verification, username, password, email, dip, w, r)
 		captchaD := payload.Get("captchaToken")
 		var captchaData map[string]string
 		if captchaD != "" {
@@ -369,7 +368,7 @@ func register(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		CaptchaToken(captchaD, captchaData, w, dip)
+		CaptchaToken(captchaD, captchaData, w, dip, r)
 
 		sig := payload.Get("signature")
 		tok := payload.Get("jwtAnswer")
@@ -431,12 +430,12 @@ func register(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		Verify(verification, password, email, dip, w)
-		Authing(username, email, password, verification, dip, w, true)
+		Verify(verification, password, email, dip, w, r)
+		Authing(username, email, password, verification, dip, w, r, true)
 	}
 }
 
-func CaptchaGeneration(verification string, username string, password string, email string, dip string, w http.ResponseWriter) {
+func CaptchaGeneration(verification string, username string, password string, email string, dip string, w http.ResponseWriter, r *http.Request) {
 	if verification == "" && username == "" && password == "" && email == "" { // this means user wants captcha
 		captcha := Init()
 		captData, err := captcha.Generate()
@@ -460,7 +459,7 @@ func CaptchaGeneration(verification string, username string, password string, em
 		}
 		jsonedBuffer, _ := json.Marshal(jsoned)
 		// we should have store the answer in some storage,
-		redis_client.Set(context.Background(), "captcha"+dip, fmt.Sprintf("%d,%d", captData.GetData().X, captData.GetData().Y), 1*time.Minute)
+		redis_client.Set(r.Context(), "captcha"+dip, fmt.Sprintf("%d,%d", captData.GetData().X, captData.GetData().Y), 1*time.Minute)
 		w.WriteHeader(http.StatusAccepted)
 		w.Write(jsonedBuffer)
 		return
@@ -468,7 +467,7 @@ func CaptchaGeneration(verification string, username string, password string, em
 
 }
 
-func CaptchaToken(captchaD string, captchaData map[string]string, w http.ResponseWriter, dip string) {
+func CaptchaToken(captchaD string, captchaData map[string]string, w http.ResponseWriter, dip string, r *http.Request) {
 	if captchaD != "" {
 		x, err := strconv.Atoi(captchaData["x"])
 		if err != nil { // this blocks are for testing and might be removed or above code might be changed
@@ -483,7 +482,7 @@ func CaptchaToken(captchaD string, captchaData map[string]string, w http.Respons
 			return
 		}
 
-		str, err := redis_client.GetDel(context.Background(), "captcha"+dip).Result()
+		str, err := redis_client.GetDel(r.Context(), "captcha"+dip).Result()
 		if err != nil {
 			if err == redis.Nil {
 				w.WriteHeader(http.StatusBadRequest)
@@ -508,15 +507,15 @@ func CaptchaToken(captchaD string, captchaData map[string]string, w http.Respons
 			tok := hex.EncodeToString(buff)
 			//jwt
 			jsonAnswer := `{
-				tok:` + tok + `,
-				time:` + fmt.Sprintf("%d", time.Now().Unix()) + `
+				"tok":"` + tok + `",
+				"time":"` + fmt.Sprintf("%d", time.Now().Unix()) + `"
 			}`
 			summed := sha256.Sum256([]byte(jsonAnswer))
 			signature, _ := rsa.SignPKCS1v15(rand.Reader, privateKey, crypto.SHA256, summed[:])
 			w.WriteHeader(http.StatusAccepted)
 			w.Write([]byte(`{
-				answer: ` + jsonAnswer + `,
-				signature: ` + base64.StdEncoding.EncodeToString(signature) + `
+				"answer": ` + jsonAnswer + `,
+				"signature": "` + base64.StdEncoding.EncodeToString(signature) + `"
 			}`))
 			return
 		} else {
@@ -530,7 +529,7 @@ func CaptchaToken(captchaD string, captchaData map[string]string, w http.Respons
 	}
 }
 
-func Verify(verification string, password string, email string, dip string, w http.ResponseWriter) {
+func Verify(verification string, password string, email string, dip string, w http.ResponseWriter, r *http.Request) {
 	if verification == "" {
 		if len(password) < 8 || !(strings.ContainsAny(password, "!@#$%^&*") && strings.ContainsAny(password, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") && strings.ContainsAny(password, "0123456789") && strings.ContainsAny(password, "abcdefghijklmnopqrstuvwxyz")) {
 			w.WriteHeader(http.StatusBadRequest)
@@ -549,7 +548,7 @@ func Verify(verification string, password string, email string, dip string, w ht
 			w.Write([]byte("Problem with sending email to you happened in server"))
 			return
 		}
-		redis_client.Set(context.Background(), "captcha"+dip, vcode, 1*time.Minute)
+		redis_client.Set(r.Context(), "captcha"+dip, vcode, 1*time.Minute)
 	} else {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("Bad request"))
@@ -557,10 +556,10 @@ func Verify(verification string, password string, email string, dip string, w ht
 	}
 }
 
-func Authing(username string, email string, password string, verification string, dip string, w http.ResponseWriter, registery bool) {
+func Authing(username string, email string, password string, verification string, dip string, w http.ResponseWriter, r *http.Request, registery bool) {
 	if vercode, erro := strconv.Atoi(verification); erro != nil {
 		// in this case user received the code and its on the header now
-		vc, err := redis_client.GetDel(context.Background(), "captcha"+dip).Result()
+		vc, err := redis_client.GetDel(r.Context(), "captcha"+dip).Result()
 		verificationCode, err1 := strconv.Atoi(vc)
 		if err1 != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -608,9 +607,9 @@ func Authing(username string, email string, password string, verification string
 			var rows *sql.Rows
 			var erra error
 			if strings.Contains(email, "@") {
-				rows, erra = postgres_client.Query("SELECT password FROM users WHERE email=$1", email)
+				rows, erra = postgres_client.Query("SELECT refreshToken, password FROM users WHERE email=$1", email)
 			} else {
-				rows, erra = postgres_client.Query("SELECT password FROM users WHERE username=$1", username)
+				rows, erra = postgres_client.Query("SELECT refreshToken, password FROM users WHERE username=$1", username)
 			}
 			if erra != nil {
 				w.WriteHeader(http.StatusInternalServerError)
@@ -619,13 +618,22 @@ func Authing(username string, email string, password string, verification string
 			}
 			if rows.Next() {
 				var refreshTokenHex string
-				err1 := rows.Scan(&refreshTokenHex)
+				var hashedPassword []byte
+
+				err1 := rows.Scan(&refreshTokenHex, &hashedPassword)
 				rows.Close()
 				if err1 != nil {
 					w.WriteHeader(http.StatusBadRequest)
 					w.Write([]byte("Bad request"))
 					return
 				}
+
+				if bcrypt.CompareHashAndPassword(hashedPassword, []byte(password)) != nil {
+					w.WriteHeader(http.StatusBadRequest)
+					w.Write([]byte("Bad request"))
+					return
+				}
+
 				w.WriteHeader(http.StatusAccepted)
 				w.Write([]byte(refreshTokenHex))
 				return
