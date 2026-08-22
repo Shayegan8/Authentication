@@ -17,9 +17,13 @@ and tunnel them with a reverse proxy (ngnix)
 
 import (
 	"context"
+	"crypto"
 	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
 	"database/sql"
 	_ "embed"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -32,7 +36,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -60,8 +63,6 @@ type BucketData struct {
 
 var redis_client *redis.Client
 var postgres_client *sql.DB
-var captchaTokens map[string]CaptchData
-var captchaTokensLock *sync.Mutex
 var users map[string]slide.CaptData
 var auth smtp.Auth
 
@@ -102,6 +103,9 @@ func generateBucket(n int) []string {
 	return arr
 }
 
+var publicKey *rsa.PublicKey
+var privateKey *rsa.PrivateKey
+
 func main() {
 	json.Unmarshal(myblog.ConfigBuffer, &myblog.Config)
 	redis_client = module.InitRDB()
@@ -112,6 +116,11 @@ func main() {
 	router.HandleFunc("/login", login)
 	router.HandleFunc("/register", register)
 	rrouter := handlers.LoggingHandler(os.Stdout, router)
+
+	key, _ := rsa.GenerateKey(rand.Reader, 2048)
+
+	privateKey = key
+	publicKey = &key.PublicKey
 
 	server := &http.Server{
 		Handler:      rrouter,
@@ -223,22 +232,55 @@ func login(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		verification := payload.Get("verification")
+		password := payload.Get("password")
+		email := payload.Get("email") // for login email field can be either username or email
+		CaptchaGeneration(verification, email, password, email, dip, w)
 		captchaD := payload.Get("captchaToken")
 		var captchaData map[string]string
 		if captchaD != "" {
 			err := json.Unmarshal([]byte(captchaD), &captchaData)
 			if err != nil {
 				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte("It should be all string"))
+				w.Write([]byte("Bad request"))
 				return
 			}
 		}
-
-		verification := payload.Get("verification")
-		password := payload.Get("password")
-		email := payload.Get("email") // for login email field can be either username or email
-		CaptchaGeneration(verification, email, password, email, dip, w)
 		CaptchaToken(captchaD, captchaData, w, dip)
+
+		sig := payload.Get("signature")
+		tok := payload.Get("jwtAnswer")
+		summedJwt := sha256.Sum256([]byte(tok))
+		decodedSig, erri := base64.StdEncoding.DecodeString(sig)
+		if erri != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		verErr := rsa.VerifyPKCS1v15(publicKey, crypto.SHA256, summedJwt[:], decodedSig)
+
+		if verErr != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		var marshaled map[string]string
+		erro := json.Unmarshal([]byte(tok), &marshaled)
+		if erro != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		}
+
+		converted, _ := strconv.Atoi(marshaled["time"])
+
+		if (time.Now().Unix() - int64(converted)) > 300 {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
 
 		if email == "" || password == "" {
 			w.WriteHeader(http.StatusBadRequest)
@@ -310,6 +352,12 @@ func register(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		verification := payload.Get("verification")
+		username := payload.Get("username")
+		password := payload.Get("password")
+		email := payload.Get("email")
+
+		CaptchaGeneration(verification, username, password, email, dip, w)
 		captchaD := payload.Get("captchaToken")
 		var captchaData map[string]string
 		if captchaD != "" {
@@ -321,13 +369,41 @@ func register(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		verification := payload.Get("verification")
-		username := payload.Get("username")
-		password := payload.Get("password")
-		email := payload.Get("email")
-
-		CaptchaGeneration(verification, username, password, email, dip, w)
 		CaptchaToken(captchaD, captchaData, w, dip)
+
+		sig := payload.Get("signature")
+		tok := payload.Get("jwtAnswer")
+		summedJwt := sha256.Sum256([]byte(tok))
+		decodedSig, erri := base64.StdEncoding.DecodeString(sig)
+		if erri != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		verErr := rsa.VerifyPKCS1v15(publicKey, crypto.SHA256, summedJwt[:], decodedSig)
+
+		if verErr != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		var marshaled map[string]string
+		erro := json.Unmarshal([]byte(tok), &marshaled)
+		if erro != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		}
+
+		converted, _ := strconv.Atoi(marshaled["time"])
+
+		if (time.Now().Unix() - int64(converted)) > 300 {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
 
 		if username == "" || email == "" || password == "" {
 			w.WriteHeader(http.StatusBadRequest)
@@ -384,9 +460,7 @@ func CaptchaGeneration(verification string, username string, password string, em
 		}
 		jsonedBuffer, _ := json.Marshal(jsoned)
 		// we should have store the answer in some storage,
-		captchaTokensLock.Lock()
-		captchaTokens[dip] = CaptchData{x: captData.GetData().X, y: captData.GetData().Y, timestamp: time.Now().Unix()}
-		captchaTokensLock.Unlock()
+		redis_client.Set(context.Background(), "captcha"+dip, fmt.Sprintf("%d,%d", captData.GetData().X, captData.GetData().Y), 1*time.Minute)
 		w.WriteHeader(http.StatusAccepted)
 		w.Write(jsonedBuffer)
 		return
@@ -399,41 +473,53 @@ func CaptchaToken(captchaD string, captchaData map[string]string, w http.Respons
 		x, err := strconv.Atoi(captchaData["x"])
 		if err != nil { // this blocks are for testing and might be removed or above code might be changed
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("It should be string"))
+			w.Write([]byte("Bad request"))
 			return
 		}
 		y, err1 := strconv.Atoi(captchaData["y"])
 		if err1 != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("It should be string"))
+			w.Write([]byte("Bad request"))
 			return
 		}
 
-		captchaTokensLock.Lock()
-		if (time.Now().Unix() - captchaTokens[dip].timestamp) < 600 {
-			if (captchaData["x"] == "" || captchaData["y"] == "") && captchaData["token"] != captchaTokens[dip].token {
-				captchaTokensLock.Unlock()
+		str, err := redis_client.GetDel(context.Background(), "captcha"+dip).Result()
+		if err != nil {
+			if err == redis.Nil {
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write([]byte("Bad request"))
 				return
 			}
-			if x == captchaTokens[dip].x && y == captchaTokens[dip].y {
-				buff := make([]byte, 10)
-				rand.Read(buff)
-				tok := hex.EncodeToString(buff)
-				captchaTokens[dip] = CaptchData{token: tok, timestamp: time.Now().Unix()}
-				captchaTokensLock.Unlock()
-				w.WriteHeader(http.StatusAccepted)
-				return
-			} else {
-				captchaTokensLock.Unlock()
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte("Bad request"))
-				return
-			}
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		}
+		ts := strings.Split(str, ",")
+		xx, _ := strconv.Atoi(ts[0])
+		yy, _ := strconv.Atoi(ts[1])
+		if captchaData["x"] == "" || captchaData["y"] == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		if x == xx && y == yy {
+			buff := make([]byte, 10)
+			rand.Read(buff)
+			tok := hex.EncodeToString(buff)
+			//jwt
+			jsonAnswer := `{
+				tok:` + tok + `,
+				time:` + fmt.Sprintf("%d", time.Now().Unix()) + `
+			}`
+			summed := sha256.Sum256([]byte(jsonAnswer))
+			signature, _ := rsa.SignPKCS1v15(rand.Reader, privateKey, crypto.SHA256, summed[:])
+			w.WriteHeader(http.StatusAccepted)
+			w.Write([]byte(`{
+				answer: ` + jsonAnswer + `,
+				signature: ` + base64.StdEncoding.EncodeToString(signature) + `
+			}`))
+			return
 		} else {
-			captchaTokens[dip] = CaptchData{}
-			captchaTokensLock.Unlock()
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -463,9 +549,7 @@ func Verify(verification string, password string, email string, dip string, w ht
 			w.Write([]byte("Problem with sending email to you happened in server"))
 			return
 		}
-		captchaTokensLock.Lock()
-		captchaTokens[dip] = CaptchData{verification: vcode, timestamp: time.Now().Unix()}
-		captchaTokensLock.Unlock()
+		redis_client.Set(context.Background(), "captcha"+dip, vcode, 1*time.Minute)
 	} else {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("Bad request"))
@@ -476,9 +560,24 @@ func Verify(verification string, password string, email string, dip string, w ht
 func Authing(username string, email string, password string, verification string, dip string, w http.ResponseWriter, registery bool) {
 	if vercode, erro := strconv.Atoi(verification); erro != nil {
 		// in this case user received the code and its on the header now
-		captchaTokensLock.Lock()
-		if captchaTokens[dip].verification != vercode {
-			captchaTokensLock.Unlock()
+		vc, err := redis_client.GetDel(context.Background(), "captcha"+dip).Result()
+		verificationCode, err1 := strconv.Atoi(vc)
+		if err1 != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error")) // i dont think this happens, anyway
+			return
+		}
+		if err != nil {
+			if err == redis.Nil {
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte("Bad request")) // i dont think this happens, anyway
+				return
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		}
+		if verificationCode != vercode {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
