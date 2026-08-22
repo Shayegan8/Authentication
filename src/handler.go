@@ -126,49 +126,72 @@ func main() {
 
 func bucketHandlement(w http.ResponseWriter, r *http.Request) {
 	dip := r.Header.Get("realip")
-	var rtoken string = ""
-	errio := redis_client.Watch(context.Background(), func(tx *redis.Tx) error {
-		keys, err := tx.Exists(context.Background(), dip).Result()
-		if err != nil {
-			return err
-		}
-		if keys == 0 {
-			redis_pipe := tx.Pipeline()
-			buckdat := generateBucket(rnd.IntN(50) + 20)
-			redis_pipe.LPush(context.Background(), dip, buckdat)
-			redis_pipe.Expire(context.Background(), dip, 5*time.Minute)
-			redis_pipe.Exec(context.Background())
-			token, err := tx.RPop(context.Background(), dip).Result()
-			rtoken = token
-			if err != nil {
-				return err
-			}
-		} else {
-			token, err := tx.RPop(context.Background(), dip).Result()
-			if err != nil {
-				if err == redis.Nil {
-					return err
-				}
-				return err
-			}
-			rtoken = token
-		}
-		return nil
-	}, dip)
+	token, err := redis_client.RPop(context.Background(), dip).Result()
+	if err == redis.Nil {
 
-	if rtoken != "" {
+		counter, err := redis_client.Incr(context.Background(), "counter"+dip).Result()
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		}
+
+		if counter == 1 {
+			redis_client.Expire(context.Background(), "counter"+dip, 30*time.Second)
+		}
+
+		if counter > 10 {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		redis_pipe := redis_client.Pipeline()
+		buckdat := generateBucket(rnd.IntN(50) + 20)
+		buckdatInterfaces := make([]any, len(buckdat))
+		for k, v := range buckdat {
+			buckdatInterfaces[k] = v
+		}
+		redis_pipe.LPush(context.Background(), dip, buckdatInterfaces...)
+		redis_pipe.Expire(context.Background(), dip, 5*time.Minute)
+		redis_pipe.Exec(context.Background())
+		token, err := redis_client.RPop(context.Background(), dip).Result()
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		}
 		w.WriteHeader(http.StatusAccepted)
-		w.Write([]byte(rtoken))
+		w.Write([]byte(token))
 		return
 	} else {
-		if errio != nil {
-			if errio != redis.Nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte("Server error"))
-			} else {
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte("Bad request"))
-			}
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		}
+		result, err := redis_client.LIndex(context.Background(), dip, -1).Result()
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		}
+		if result == "in-queue" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+
+		}
+		w.WriteHeader(http.StatusAccepted)
+		w.Write([]byte(token))
+		length, err := redis_client.LLen(context.Background(), dip).Result()
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		}
+		if length == 0 {
+			redis_client.LPush(context.Background(), dip, "in-queue")
 		}
 	}
 }
