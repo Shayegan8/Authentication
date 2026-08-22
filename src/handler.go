@@ -126,45 +126,51 @@ func main() {
 
 func bucketHandlement(w http.ResponseWriter, r *http.Request) {
 	dip := r.Header.Get("realip")
-	keys, err1 := redis_client.Exists(context.Background(), dip).Result()
-	if err1 != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Server error"))
-		return
-	}
-	redis_client.Watch(context.Background(), func(tx *redis.Tx) error {
+	var rtoken string = ""
+	errio := redis_client.Watch(context.Background(), func(tx *redis.Tx) error {
+		keys, err := tx.Exists(context.Background(), dip).Result()
+		if err != nil {
+			return err
+		}
 		if keys == 0 {
-			redis_pipe := redis_client.Pipeline()
+			redis_pipe := tx.Pipeline()
 			buckdat := generateBucket(rnd.IntN(50) + 20)
 			redis_pipe.LPush(context.Background(), dip, buckdat)
 			redis_pipe.Expire(context.Background(), dip, 5*time.Minute)
 			redis_pipe.Exec(context.Background())
-			token, err := redis_client.RPop(context.Background(), dip).Result()
+			token, err := tx.RPop(context.Background(), dip).Result()
+			rtoken = token
 			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte("Server error"))
 				return err
 			}
-
-			w.WriteHeader(http.StatusAccepted)
-			w.Write([]byte(token))
 		} else {
-			token, err := redis_client.RPop(context.Background(), dip).Result()
+			token, err := tx.RPop(context.Background(), dip).Result()
 			if err != nil {
 				if err == redis.Nil {
-					w.WriteHeader(http.StatusBadRequest)
-					w.Write([]byte("Bad request"))
 					return err
 				}
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte("Server error"))
 				return err
 			}
-			w.WriteHeader(http.StatusAccepted)
-			w.Write([]byte(token))
+			rtoken = token
 		}
 		return nil
 	}, dip)
+
+	if rtoken != "" {
+		w.WriteHeader(http.StatusAccepted)
+		w.Write([]byte(rtoken))
+		return
+	} else {
+		if errio != nil {
+			if errio != redis.Nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("Server error"))
+			} else {
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte("Bad request"))
+			}
+		}
+	}
 }
 
 func login(w http.ResponseWriter, r *http.Request) {
@@ -182,9 +188,13 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 		dip := r.Header.Get("realip")
 
-		_, err := redis_client.LPos(context.Background(), dip, token, redis.LPosArgs{MaxLen: 1}).Result()
+		removed, err := redis_client.LRem(context.Background(), dip, 1, token).Result()
 
-		if err == nil {
+		if err != nil { // dont care if its server error or client bad request
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		} else if removed == 0 {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -265,15 +275,16 @@ func register(w http.ResponseWriter, r *http.Request) {
 
 		dip := r.Header.Get("realip")
 
-		_, err := redis_client.LPos(context.Background(), dip, token, redis.LPosArgs{MaxLen: 1}).Result()
+		removed, err := redis_client.LRem(context.Background(), dip, 1, token).Result()
 
 		if err != nil { // dont care if its server error or client bad request
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		} else if removed == 0 {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
-		} else {
-			redis_client.RPop(context.Background(), dip)
-			// continuing the process
 		}
 
 		captchaD := payload.Get("captchaToken")
@@ -412,7 +423,7 @@ func CaptchaToken(captchaD string, captchaData map[string]string, w http.Respons
 
 func Verify(verification string, password string, email string, dip string, w http.ResponseWriter) {
 	if verification == "" {
-		if len(password) < 8 || (strings.ContainsAny(password, "!@#$%^&*") && strings.ContainsAny(password, "0123456789") && strings.ContainsAny(password, "abcdefghijklmnopqrstuvwxyz")) {
+		if len(password) < 8 || !(strings.ContainsAny(password, "!@#$%^&*") && strings.ContainsAny(password, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") && strings.ContainsAny(password, "0123456789") && strings.ContainsAny(password, "abcdefghijklmnopqrstuvwxyz")) {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
