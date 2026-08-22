@@ -132,36 +132,39 @@ func bucketHandlement(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Server error"))
 		return
 	}
-	if keys == 0 {
-		redis_pipe := redis_client.Pipeline()
-		buckdat := generateBucket(rnd.IntN(50) + 20)
-		redis_pipe.LPush(context.Background(), dip, buckdat)
-		redis_pipe.Expire(context.Background(), dip, 5*time.Minute)
-		redis_pipe.Exec(context.Background())
-		token, err := redis_client.RPop(context.Background(), dip).Result()
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-			return
-		}
-
-		w.WriteHeader(http.StatusAccepted)
-		w.Write([]byte(token))
-	} else {
-		token, err := redis_client.RPop(context.Background(), dip).Result()
-		if err != nil {
-			if err == redis.Nil {
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte("Bad request"))
-				return
+	redis_client.Watch(context.Background(), func(tx *redis.Tx) error {
+		if keys == 0 {
+			redis_pipe := redis_client.Pipeline()
+			buckdat := generateBucket(rnd.IntN(50) + 20)
+			redis_pipe.LPush(context.Background(), dip, buckdat)
+			redis_pipe.Expire(context.Background(), dip, 5*time.Minute)
+			redis_pipe.Exec(context.Background())
+			token, err := redis_client.RPop(context.Background(), dip).Result()
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("Server error"))
+				return err
 			}
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-			return
+
+			w.WriteHeader(http.StatusAccepted)
+			w.Write([]byte(token))
+		} else {
+			token, err := redis_client.RPop(context.Background(), dip).Result()
+			if err != nil {
+				if err == redis.Nil {
+					w.WriteHeader(http.StatusBadRequest)
+					w.Write([]byte("Bad request"))
+					return err
+				}
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("Server error"))
+				return err
+			}
+			w.WriteHeader(http.StatusAccepted)
+			w.Write([]byte(token))
 		}
-		w.WriteHeader(http.StatusAccepted)
-		w.Write([]byte(token))
-	}
+		return nil
+	}, dip)
 }
 
 func login(w http.ResponseWriter, r *http.Request) {
@@ -264,10 +267,13 @@ func register(w http.ResponseWriter, r *http.Request) {
 
 		_, err := redis_client.LPos(context.Background(), dip, token, redis.LPosArgs{MaxLen: 1}).Result()
 
-		if err == nil {
+		if err != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
+		} else {
+			redis_client.RPop(context.Background(), dip)
+			// continuing the process
 		}
 
 		captchaD := payload.Get("captchaToken")
