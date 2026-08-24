@@ -18,7 +18,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/redis/go-redis/v9"
 	"github.com/wenlng/go-captcha-assets/resources/imagesv2"
@@ -335,16 +334,15 @@ func CaptchaGeneration(verification string, username string, password string, em
 
 		masterImage, _ := captData.GetMasterImage().ToBase64()
 		tileImage, _ := captData.GetTileImage().ToBase64()
-		jsoned := map[string]string{
-			"masterImage": masterImage,
-			"tileImage":   tileImage,
-		}
-		jsonedBuffer, _ := json.Marshal(jsoned)
+		jsoned := `{
+			"masterImage": "` + masterImage + `",
+			"titleImage": "` + tileImage + `"
+		}`
 		// we should have store the answer in some storage,
 		log.Println("This is the answer, X:", captData.GetData().X, ", Y:", captData.GetData().Y)
 		Redis_client.Set(r.Context(), "captcha"+dip, fmt.Sprintf("%d,%d", captData.GetData().X, captData.GetData().Y), 1*time.Minute)
 		w.WriteHeader(http.StatusAccepted)
-		w.Write(jsonedBuffer)
+		w.Write([]byte(jsoned))
 		return true
 	}
 	return false
@@ -470,24 +468,31 @@ func Authing(username string, email string, password string, verification string
 			refreshToken := make([]byte, 32)
 			rand.Read(refreshToken)
 			refreshTokenHex := hex.EncodeToString(refreshToken)
-			_, err := Postgres_client.Exec(context.Background(),
-				"INSERT INTO users(userid, email, username, password, refreshToken, login, timestamp)"+
-					" VALUES ($1, $2, $3, $4, $5, $6, $7)", uuid.New().String(), email, username, hashedPassword, refreshTokenHex, true, time.Now().Unix())
+			query, err := Postgres_client.Query(context.Background(),
+				"INSERT INTO users(email, username, password, refreshToken, login, timestamp)"+
+					" VALUES ($1, $2, $3, $4) RETURNING userid", email, username, hashedPassword, refreshTokenHex)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte("Server error"))
-			} else {
+			}
+			if query.Next() {
+				var userid string
+				query.Scan(&userid)
+				response := `{
+					"userid": "` + userid + `,
+					"refreshToken": "` + refreshTokenHex + `"
+				}`
 				// give token and write success
 				w.WriteHeader(http.StatusAccepted)
-				w.Write([]byte(refreshTokenHex))
+				w.Write([]byte(response))
 			}
 		} else {
 			var rows pgx.Rows
 			var erra error
 			if strings.Contains(email, "@") {
-				rows, erra = Postgres_client.Query(context.Background(), "SELECT refreshToken, password FROM users WHERE email=$1", email)
+				rows, erra = Postgres_client.Query(context.Background(), "SELECT refreshToken, userid, password FROM users WHERE email=$1", email)
 			} else {
-				rows, erra = Postgres_client.Query(context.Background(), "SELECT refreshToken, password FROM users WHERE username=$1", username)
+				rows, erra = Postgres_client.Query(context.Background(), "SELECT refreshToken, userid, password FROM users WHERE username=$1", username)
 			}
 			if erra != nil {
 				w.WriteHeader(http.StatusInternalServerError)
@@ -496,9 +501,10 @@ func Authing(username string, email string, password string, verification string
 			}
 			if rows.Next() {
 				var refreshTokenHex string
+				var userid string
 				var hashedPassword []byte
 
-				err1 := rows.Scan(&refreshTokenHex, &hashedPassword)
+				err1 := rows.Scan(&refreshTokenHex, &userid, &hashedPassword)
 				rows.Close()
 				if err1 != nil {
 					w.WriteHeader(http.StatusBadRequest)
@@ -511,9 +517,13 @@ func Authing(username string, email string, password string, verification string
 					w.Write([]byte("Bad request"))
 					return
 				}
+				response := `{
+					"userid": "` + userid + `,
+					"refreshToken": "` + refreshTokenHex + `"
+				}`
 
 				w.WriteHeader(http.StatusAccepted)
-				w.Write([]byte(refreshTokenHex))
+				w.Write([]byte(response))
 				return
 			} else {
 				rows.Close()
