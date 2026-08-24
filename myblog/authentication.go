@@ -469,7 +469,7 @@ func Authing(username string, email string, password string, verification string
 			rand.Read(refreshToken)
 			refreshTokenHex := hex.EncodeToString(refreshToken)
 			query, err := Postgres_client.Query(context.Background(),
-				"INSERT INTO users(email, username, password, refreshToken, login, timestamp)"+
+				"INSERT INTO users(email, username, password, refreshToken)"+
 					" VALUES ($1, $2, $3, $4) RETURNING userid", email, username, hashedPassword, refreshTokenHex)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
@@ -479,7 +479,7 @@ func Authing(username string, email string, password string, verification string
 				var userid string
 				query.Scan(&userid)
 				response := `{
-					"userid": "` + userid + `,
+					"userid": "` + userid + `",
 					"refreshToken": "` + refreshTokenHex + `"
 				}`
 				// give token and write success
@@ -489,10 +489,13 @@ func Authing(username string, email string, password string, verification string
 		} else {
 			var rows pgx.Rows
 			var erra error
+			refreshToken := make([]byte, 32)
+			rand.Read(refreshToken)
+			refreshTokenHex := hex.EncodeToString(refreshToken)
 			if strings.Contains(email, "@") {
-				rows, erra = Postgres_client.Query(context.Background(), "SELECT refreshToken, userid, password FROM users WHERE email=$1", email)
+				rows, erra = Postgres_client.Query(context.Background(), "UPDATE users SET refreshToken = $1 WHERE email=$2 RETURNING refreshToken, userid, password", refreshTokenHex, email)
 			} else {
-				rows, erra = Postgres_client.Query(context.Background(), "SELECT refreshToken, userid, password FROM users WHERE username=$1", username)
+				rows, erra = Postgres_client.Query(context.Background(), "UPDATE users SET refreshToken = $1 WHERE username=$2 RETURNING refreshToken, userid, password", refreshTokenHex, username)
 			}
 			if erra != nil {
 				w.WriteHeader(http.StatusInternalServerError)
