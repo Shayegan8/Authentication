@@ -4,14 +4,14 @@ import (
 	"context"
 	"log"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var Postgres_client *pgx.Conn
+var Postgres_client *pgxpool.Pool
 
 func InitPDB() {
 	log.Println("Initializing postgresql")
-	db, err := pgx.Connect(context.Background(), "postgres://shayegan8/test?host=/var/run/postgresql")
+	db, err := pgxpool.New(context.Background(), "postgres://shayegan8/test?host=/var/run/postgresql")
 	if err != nil {
 		panic(err)
 	}
