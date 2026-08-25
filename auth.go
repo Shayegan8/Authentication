@@ -45,6 +45,11 @@ func main() {
 	myblog.Auth = smtp.PlainAuth("", myblog.Config["user"], myblog.Config["password"], "smtp.gmail.com")
 	router.HandleFunc("/login", myblog.Login)
 	router.HandleFunc("/register", myblog.Register)
+	router.HandleFunc("/forgetPassword", myblog.ForgetPassword)
+	router.HandleFunc("/forgetPassword/validate", myblog.ForgetPasswordValidation)
+	router.HandleFunc("/forgetPassword/validate/jwt", myblog.ForgetPasswordValidationJWT)
+	router.HandleFunc("/forgetPassword/${key}", myblog.ForgetPasswordChangeLink)
+
 	rrouter := handlers.LoggingHandler(os.Stdout, router)
 
 	key, _ := rsa.GenerateKey(rand.Reader, 2048)
