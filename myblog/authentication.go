@@ -164,7 +164,7 @@ func ForgetPasswordValidation(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-		CaptchaToken(captchaData, email, w, dip, r)
+		CaptchaToken(captchaData, email, marshaled["token"], w, dip, r)
 	}
 }
 
@@ -750,7 +750,7 @@ func LoginValidation(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-		CaptchaToken(captchaData, email, w, dip, r)
+		CaptchaToken(captchaData, email, marshaled["token"], w, dip, r)
 	}
 }
 
@@ -1102,7 +1102,7 @@ func RegisterValidation(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-		CaptchaToken(captchaData, email, w, dip, r)
+		CaptchaToken(captchaData, email, marshaled["token"], w, dip, r)
 	}
 }
 
@@ -1182,13 +1182,13 @@ func CaptchaGeneration(dip string, w http.ResponseWriter, r *http.Request) {
 		}`
 	// we should have store the answer in some storage,
 	log.Println("This is the answer, X:", captData.GetData().X, ", Y:", captData.GetData().Y)
-	Redis_client.Set(r.Context(), "captcha"+dip+fmt.Sprintf("%d,%d", captData.GetData().X, captData.GetData().Y), fmt.Sprintf("%d,%d", captData.GetData().X, captData.GetData().Y), 1*time.Minute)
+	Redis_client.Set(r.Context(), "captcha"+dip+buffTokHex, fmt.Sprintf("%d,%d", captData.GetData().X, captData.GetData().Y), 1*time.Minute)
 	w.Header().Set("content-type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	w.Write([]byte(jsoned))
 }
 
-func CaptchaToken(captchaData map[string]string, email string, w http.ResponseWriter, dip string, r *http.Request) {
+func CaptchaToken(captchaData map[string]string, email string, token string, w http.ResponseWriter, dip string, r *http.Request) {
 	x, err := strconv.Atoi(captchaData["x"])
 	if err != nil { // this blocks are for testing and might be removed or above code might be changed
 		w.WriteHeader(http.StatusBadRequest)
@@ -1202,7 +1202,7 @@ func CaptchaToken(captchaData map[string]string, email string, w http.ResponseWr
 		return
 	}
 
-	str, err := Redis_client.GetDel(r.Context(), "captcha"+dip+fmt.Sprintf("%d,%d", x, y)).Result()
+	str, err := Redis_client.GetDel(r.Context(), "captcha"+dip+token).Result()
 	if err != nil {
 		if err == redis.Nil {
 			w.WriteHeader(http.StatusBadRequest)
