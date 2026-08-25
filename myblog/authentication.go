@@ -517,21 +517,21 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-		refreshToken := make([]byte, 32)
-		rand.Read(refreshToken)
-		refreshTokenHex := hex.EncodeToString(refreshToken)
-		rows, erra := Postgres_client.Query(r.Context(), "UPDATE users SET refreshToken = $1 WHERE email=$2 RETURNING refreshToken, userid, password", refreshTokenHex, marshaled["email"])
-		if erra != nil {
+		rows, errio := Postgres_client.Query(r.Context(), "SELECT refreshToken, userid, password FROM users WHERE email=$2")
+		if errio != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
 			return
 		}
 		if rows.Next() {
-			var refreshTokenHex string
+			var refreshTokenHash []byte
 			var userid string
 			var hashedPassword []byte
+			refreshToken := make([]byte, 32)
+			rand.Read(refreshToken)
+			refreshTokenHex := hex.EncodeToString(refreshToken)
 
-			err1 := rows.Scan(&refreshTokenHex, &userid, &hashedPassword)
+			err1 := rows.Scan(&refreshTokenHash, &userid, &hashedPassword)
 			rows.Close()
 			if err1 != nil {
 				w.WriteHeader(http.StatusBadRequest)
@@ -544,6 +544,14 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 				w.Write([]byte("Bad request"))
 				return
 			}
+
+			_, erra := Postgres_client.Exec(r.Context(), "UPDATE users SET refreshToken = $1 WHERE email=$2 RETURNING refreshToken, userid, password", refreshTokenHex, marshaled["email"])
+			if erra != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("Server error"))
+				return
+			}
+
 			response := `{
 					"userid": "` + userid + `,
 					"refreshToken": "` + refreshTokenHex + `"
@@ -903,8 +911,8 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			"INSERT INTO users(email, username, password, refreshToken)"+
 				" VALUES ($1, $2, $3, $4) RETURNING userid", marshaled["email"], username, hashedPassword, refreshTokenHex)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
 		}
 		if query.Next() {
 			var userid string
