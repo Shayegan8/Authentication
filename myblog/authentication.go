@@ -320,6 +320,7 @@ func ForgetPasswordChangeLink(w http.ResponseWriter, r *http.Request) {
 			}`
 			summed := sha256.Sum256([]byte(jsonAnswer))
 			signature, _ := rsa.SignPKCS1v15(rand.Reader, PrivateKey, crypto.SHA256, summed[:])
+			w.Header().Set("content-type", "application/json")
 			w.WriteHeader(http.StatusAccepted)
 			w.Write([]byte(`{
 				"answer": ` + jsonAnswer + `,
@@ -556,8 +557,8 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 					"refreshToken": "` + refreshTokenHex + `"
 				}`
 
-			w.WriteHeader(http.StatusAccepted)
 			w.Header().Set("content-type", "application/json")
+			w.WriteHeader(http.StatusAccepted)
 			w.Write([]byte(response))
 			return
 		} else {
@@ -929,8 +930,8 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 					"refreshToken": "` + refreshTokenHex + `"
 				}`
 			// give token and write success
-			w.WriteHeader(http.StatusAccepted)
 			w.Header().Set("content-type", "application/json")
+			w.WriteHeader(http.StatusAccepted)
 			w.Write([]byte(response))
 		}
 	}
@@ -1182,8 +1183,8 @@ func CaptchaGeneration(dip string, w http.ResponseWriter, r *http.Request) {
 	// we should have store the answer in some storage,
 	log.Println("This is the answer, X:", captData.GetData().X, ", Y:", captData.GetData().Y)
 	Redis_client.Set(r.Context(), "captcha"+dip+fmt.Sprintf("%d,%d", captData.GetData().X, captData.GetData().Y), fmt.Sprintf("%d,%d", captData.GetData().X, captData.GetData().Y), 1*time.Minute)
-	w.WriteHeader(http.StatusAccepted)
 	w.Header().Set("content-type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
 	w.Write([]byte(jsoned))
 }
 
@@ -1232,8 +1233,8 @@ func CaptchaToken(captchaData map[string]string, email string, w http.ResponseWr
 			}`
 		summed := sha256.Sum256([]byte(jsonAnswer))
 		signature, _ := rsa.SignPKCS1v15(rand.Reader, PrivateKey, crypto.SHA256, summed[:])
-		w.WriteHeader(http.StatusAccepted)
 		w.Header().Set("content-type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
 		w.Write([]byte(`{
 				"answer": ` + jsonAnswer + `,
 				"signature": "` + base64.StdEncoding.EncodeToString(signature) + `"
