@@ -28,13 +28,13 @@ func GenerateBucket(n int) []string {
 
 var l = log.Println
 
-func BucketHandlement(w http.ResponseWriter, r *http.Request) {
+func BucketHandlement(name string, w http.ResponseWriter, r *http.Request) {
 	dip := r.Header.Get("realip")
 	token, err := Redis_client.LIndex(r.Context(), dip, -1).Result()
 	l("shit", token)
 	if err == redis.Nil {
 		l("shit1")
-		counter, err := Redis_client.Incr(r.Context(), "counter"+dip).Result()
+		counter, err := Redis_client.Incr(r.Context(), name+dip).Result()
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
@@ -42,7 +42,7 @@ func BucketHandlement(w http.ResponseWriter, r *http.Request) {
 		}
 		l("Whats the counter:", counter)
 		if counter == 1 {
-			Redis_client.Expire(r.Context(), "counter"+dip, 30*time.Second)
+			Redis_client.Expire(r.Context(), name+dip, 30*time.Second)
 		}
 
 		redis_pipe := Redis_client.Pipeline()
@@ -70,7 +70,7 @@ func BucketHandlement(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		counter, err := Redis_client.Incr(r.Context(), "counter"+dip).Result()
+		counter, err := Redis_client.Incr(r.Context(), name+dip).Result()
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))

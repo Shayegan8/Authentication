@@ -62,7 +62,7 @@ func ForgetPassword(w http.ResponseWriter, r *http.Request) { // dosen't require
 	payload := r.Header
 	switch r.Method {
 	case "GET":
-		BucketHandlement(w, r)
+		BucketHandlement("forget", w, r)
 	case "POST":
 		token := payload.Get("token") // generated token from bucket
 		sig := payload.Get("signature")
@@ -94,7 +94,7 @@ func ForgetPasswordValidation(w http.ResponseWriter, r *http.Request) {
 	dip := r.Header.Get("realip")
 	switch r.Method {
 	case "GET":
-		BucketHandlement(w, r)
+		BucketHandlement("forgetValidation", w, r)
 	case "POST":
 		email := payload.Get("email")
 		token := payload.Get("token")
@@ -172,7 +172,7 @@ func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
 	payload := r.Header
 	switch r.Method {
 	case "GET":
-		BucketHandlement(w, r)
+		BucketHandlement("forgetValidationJWT", w, r)
 	case "POST":
 		dip := payload.Get("realip")
 		sig := payload.Get("signature")
@@ -274,8 +274,8 @@ func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func rateLimiter(dip string, w http.ResponseWriter, r *http.Request) bool {
-	counter, err := Redis_client.Incr(r.Context(), "counter"+dip).Result()
+func rateLimiter(dip string, name string, w http.ResponseWriter, r *http.Request) bool {
+	counter, err := Redis_client.Incr(r.Context(), name+dip).Result()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Server error"))
@@ -283,7 +283,7 @@ func rateLimiter(dip string, w http.ResponseWriter, r *http.Request) bool {
 	}
 	l("Whats the counter:", counter)
 	if counter == 1 {
-		Redis_client.Expire(r.Context(), "counter"+dip, 30*time.Second)
+		Redis_client.Expire(r.Context(), name+dip, 30*time.Second)
 	}
 
 	if counter >= 10 {
@@ -300,7 +300,7 @@ func ForgetPasswordChangeLink(w http.ResponseWriter, r *http.Request) {
 	dip := payload.Get("realip")
 	switch r.Method {
 	case "GET":
-		if !rateLimiter(dip, w, r) {
+		if !rateLimiter(dip, "forgetLink", w, r) {
 			return
 		}
 		email, err := Redis_client.LPop(r.Context(), vars["token"]).Result()
@@ -328,7 +328,7 @@ func ForgetPasswordChangeLink(w http.ResponseWriter, r *http.Request) {
 			}`))
 		}
 	case "POST":
-		if !rateLimiter(dip, w, r) {
+		if !rateLimiter(dip, "forgetLink", w, r) {
 			return
 		}
 		password := payload.Get("password")
@@ -402,7 +402,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 	dip := payload.Get("realip")
 	switch r.Method {
 	case "GET":
-		BucketHandlement(w, r)
+		BucketHandlement("loginValidationSubmit", w, r)
 	case "POST":
 		sig := payload.Get("signature")
 		answer := payload.Get("answer")
@@ -545,7 +545,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			_, erra := Postgres_client.Exec(r.Context(), "UPDATE users SET refreshToken = $1 WHERE email=$2 RETURNING refreshToken, userid, password", refreshTokenHex, marshaled["email"])
+			_, erra := Postgres_client.Exec(r.Context(), "UPDATE users SET refreshToken = $1 WHERE email=$2 RETURNING refreshToken, userid, password", refreshToken, marshaled["email"])
 			if erra != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte("Server error"))
@@ -575,7 +575,7 @@ func LoginValidationJWT(w http.ResponseWriter, r *http.Request) {
 	dip := payload.Get("realip")
 	switch r.Method {
 	case "GET":
-		BucketHandlement(w, r)
+		BucketHandlement("loginValidationJWT", w, r)
 	case "POST":
 		sig := payload.Get("signature")
 		answer := payload.Get("answer")
@@ -679,7 +679,7 @@ func LoginValidation(w http.ResponseWriter, r *http.Request) {
 	payload := r.Header
 	switch r.Method {
 	case "GET":
-		BucketHandlement(w, r)
+		BucketHandlement("loginValidation", w, r)
 	case "POST":
 		email := payload.Get("email")
 		captchaD := payload.Get("captchaAnswer")
@@ -758,7 +758,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	payload := r.Header
 	switch r.Method {
 	case "GET":
-		BucketHandlement(w, r)
+		BucketHandlement("login", w, r)
 	case "POST":
 		dip := r.Header.Get("realip")
 		token := payload.Get("token") // generated token from bucket
@@ -788,7 +788,7 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 	payload := r.Header
 	switch r.Method {
 	case "GET":
-		BucketHandlement(w, r)
+		BucketHandlement("registerValidationSubmit", w, r)
 	case "POST":
 		token := payload.Get("token") // generated token from bucket
 		sig := payload.Get("signature")
@@ -910,7 +910,7 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 		refreshTokenHex := hex.EncodeToString(refreshToken)
 		query, err := Postgres_client.Query(r.Context(),
 			"INSERT INTO users(email, username, password, refreshToken)"+
-				" VALUES ($1, $2, $3, $4) RETURNING userid", marshaled["email"], username, hashedPassword, refreshTokenHex)
+				" VALUES ($1, $2, $3, $4) RETURNING userid", marshaled["email"], username, hashedPassword, refreshToken)
 		if err != nil {
 			// this isnt possible but anyway
 			if err == redis.Nil {
@@ -941,7 +941,7 @@ func RegisterValidationJWT(w http.ResponseWriter, r *http.Request) {
 	payload := r.Header
 	switch r.Method {
 	case "GET":
-		BucketHandlement(w, r)
+		BucketHandlement("registerValidationJWT", w, r)
 	case "POST":
 		token := payload.Get("token")
 		sig := payload.Get("signature")
@@ -1034,7 +1034,7 @@ func RegisterValidation(w http.ResponseWriter, r *http.Request) {
 	payload := r.Header
 	switch r.Method {
 	case "GET":
-		BucketHandlement(w, r)
+		BucketHandlement("registerValidation", w, r)
 	case "POST":
 		captchaD := payload.Get("captchaAnswer")
 		sig := payload.Get("signature")
@@ -1110,7 +1110,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	payload := r.Header
 	switch r.Method {
 	case "GET":
-		BucketHandlement(w, r)
+		BucketHandlement("register", w, r)
 	case "POST":
 		token := payload.Get("token") // generated token from bucket
 		log.Println("Token seems obtained")
