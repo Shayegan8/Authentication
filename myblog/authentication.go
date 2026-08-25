@@ -911,7 +911,7 @@ func LoginValidation(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-		CaptchaToken(captchaData, "loginValidationJWT", email, marshaled["token"], w, dip, r)
+		CaptchaToken(captchaData, "loginValidationJWT", "login/validation", email, marshaled["token"], w, dip, r)
 	}
 }
 
@@ -1121,7 +1121,7 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 				HttpOnly: true,
 				Secure:   true,
 				SameSite: http.SameSiteStrictMode,
-				Path:     "/auth", // Only sent to auth endpoints
+				Path:     "/auth/register/validation/submit", // Only sent to auth endpoints
 				MaxAge:   0,
 			})
 
@@ -1346,7 +1346,7 @@ func RegisterValidation(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-		CaptchaToken(captchaData, "registerValidationJWT", email, marshaled["token"], w, dip, r)
+		CaptchaToken(captchaData, "registerValidationJWT", "register/validation", email, marshaled["token"], w, dip, r)
 	}
 }
 
@@ -1378,12 +1378,12 @@ func Register(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 		} else {
-			CaptchaGeneration(dip, "registerValidation", w, r)
+			CaptchaGeneration(dip, "registerValidation", "register", w, r)
 		}
 	}
 }
 
-func CaptchaGeneration(dip string, name string, w http.ResponseWriter, r *http.Request) {
+func CaptchaGeneration(dip string, name string, endpoint string, w http.ResponseWriter, r *http.Request) {
 	captcha := Init()
 	captData, err := captcha.Generate()
 	if err != nil {
@@ -1430,7 +1430,7 @@ func CaptchaGeneration(dip string, name string, w http.ResponseWriter, r *http.R
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
-		Path:     "/auth", // Only sent to auth endpoints
+		Path:     "/auth/" + endpoint, // Only sent to auth endpoints
 		MaxAge:   5,
 	})
 	w.Write([]byte(`{
@@ -1440,7 +1440,7 @@ func CaptchaGeneration(dip string, name string, w http.ResponseWriter, r *http.R
 	w.WriteHeader(http.StatusAccepted)
 }
 
-func CaptchaToken(captchaData map[string]string, name string, email string, token string, w http.ResponseWriter, dip string, r *http.Request) {
+func CaptchaToken(captchaData map[string]string, name string, endpoint string, email string, token string, w http.ResponseWriter, dip string, r *http.Request) {
 	x, err := strconv.Atoi(captchaData["x"])
 	if err != nil { // this blocks are for testing and might be removed or above code might be changed
 		w.WriteHeader(http.StatusBadRequest)
@@ -1494,7 +1494,7 @@ func CaptchaToken(captchaData map[string]string, name string, email string, toke
 			HttpOnly: true,
 			Secure:   true,
 			SameSite: http.SameSiteStrictMode,
-			Path:     "/auth", // Only sent to auth endpoints
+			Path:     "/auth/" + endpoint, // Only sent to auth endpoints
 			MaxAge:   5,
 		})
 
