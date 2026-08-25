@@ -65,13 +65,15 @@ func ForgetPassword(w http.ResponseWriter, r *http.Request) { // dosen't require
 		BucketHandlement(w, r)
 	case "POST":
 		token := payload.Get("token") // generated token from bucket
-		if token == "" {
+		sig := payload.Get("signature")
+		answer := payload.Get("answer")
+		dip := payload.Get("realip")
+
+		if token == "" || sig == "" || answer == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
 		}
-
-		dip := r.Header.Get("realip")
 
 		removed, err := Redis_client.LRem(r.Context(), dip, 1, token).Result()
 
@@ -95,43 +97,34 @@ func ForgetPasswordValidation(w http.ResponseWriter, r *http.Request) {
 		BucketHandlement(w, r)
 	case "POST":
 		email := payload.Get("email")
+		token := payload.Get("token")
+		sig := payload.Get("signature")
+		answer := payload.Get("answer")
+		if email == "" || token == "" || answer == "" || sig == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		removed, erro := Redis_client.LRem(r.Context(), dip, 1, token).Result()
+
+		if erro != nil { // dont care if its server error or client bad request
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		} else if removed == 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
 		if _, err := mail.ParseAddress(email); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
 		}
-		captchaD := payload.Get("captchaAnswer")
-		var captchaData map[string]string
-		if captchaD != "" {
-			err := json.Unmarshal([]byte(captchaD), &captchaData)
-			if err != nil {
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte("Bad request"))
-				return
-			}
-			CaptchaToken(captchaData, email, w, dip, r)
-		} else {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-	}
-}
 
-func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
-	payload := r.Header
-	switch r.Method {
-	case "GET":
-		BucketHandlement(w, r)
-	case "POST":
-		sig := payload.Get("signature")
-		tok := payload.Get("jwtAnswer") // the same we gave them they should put it there
-		if sig == "" || tok == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		summedJwt := sha256.Sum256([]byte(tok))
+		summedJwt := sha256.Sum256([]byte(answer))
 		decodedSig, erri := base64.StdEncoding.DecodeString(sig)
 		if erri != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -148,7 +141,78 @@ func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var marshaled map[string]string
-		erro := json.Unmarshal([]byte(tok), &marshaled)
+		errq := json.Unmarshal([]byte(answer), &marshaled)
+		if errq != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		}
+
+		converted, _ := strconv.Atoi(marshaled["time"])
+
+		if (time.Now().Unix() - int64(converted)) > 300 {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		captchaD := payload.Get("captchaAnswer")
+		var captchaData map[string]string
+		err := json.Unmarshal([]byte(captchaD), &captchaData)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		CaptchaToken(captchaData, email, w, dip, r)
+	}
+}
+
+func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
+	payload := r.Header
+	switch r.Method {
+	case "GET":
+		BucketHandlement(w, r)
+	case "POST":
+		dip := payload.Get("realip")
+		sig := payload.Get("signature")
+		answer := payload.Get("answer") // the same we gave them they should put it there
+		token := payload.Get("token")
+		if sig == "" || answer == "" || token == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		removed, err := Redis_client.LRem(r.Context(), dip, 1, token).Result()
+
+		if err != nil { // dont care if its server error or client bad request
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		} else if removed == 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		summedJwt := sha256.Sum256([]byte(answer))
+		decodedSig, erri := base64.StdEncoding.DecodeString(sig)
+		if erri != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		verErr := rsa.VerifyPKCS1v15(PublicKey, crypto.SHA256, summedJwt[:], decodedSig)
+
+		if verErr != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		var marshaled map[string]string
+		erro := json.Unmarshal([]byte(answer), &marshaled)
 		if erro != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
@@ -349,7 +413,21 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 		answer := payload.Get("answer")
 		password := payload.Get("password")
 		verification := payload.Get("verification")
-		if sig == "" || answer == "" || password == "" || verification == "" {
+		token := payload.Get("token")
+
+		if sig == "" || answer == "" || password == "" || verification == "" || token == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		removed, err := Redis_client.LRem(r.Context(), dip, 1, token).Result()
+
+		if err != nil { // dont care if its server error or client bad request
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		} else if removed == 0 {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -493,7 +571,21 @@ func LoginValidationJWT(w http.ResponseWriter, r *http.Request) {
 		sig := payload.Get("signature")
 		answer := payload.Get("answer")
 		password := payload.Get("password")
-		if sig == "" || answer == "" || password == "" {
+		token := payload.Get("token")
+
+		if sig == "" || answer == "" || password == "" || token == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		removed, err := Redis_client.LRem(r.Context(), dip, 1, token).Result()
+
+		if err != nil { // dont care if its server error or client bad request
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		} else if removed == 0 {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -576,15 +668,30 @@ func LoginValidationJWT(w http.ResponseWriter, r *http.Request) {
 
 func LoginValidation(w http.ResponseWriter, r *http.Request) {
 	payload := r.Header
-	dip := payload.Get("realip")
 	switch r.Method {
 	case "GET":
 		BucketHandlement(w, r)
 	case "POST":
 		email := payload.Get("email")
 		captchaD := payload.Get("captchaAnswer")
+		sig := payload.Get("signature")
+		answer := payload.Get("answer")
+		dip := payload.Get("realip")
+		token := payload.Get("token")
 
-		if email == "" || captchaD == "" {
+		if email == "" || captchaD == "" || sig == "" || answer == "" || token == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		removed, erro := Redis_client.LRem(r.Context(), dip, 1, token).Result()
+
+		if erro != nil { // dont care if its server error or client bad request
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		} else if removed == 0 {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -595,6 +702,38 @@ func LoginValidation(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
+
+		summedJwt := sha256.Sum256([]byte(answer))
+		decodedSig, erri := base64.StdEncoding.DecodeString(sig)
+		if erri != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		verErr := rsa.VerifyPKCS1v15(PublicKey, crypto.SHA256, summedJwt[:], decodedSig)
+
+		if verErr != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		var marshaled map[string]string
+		erra := json.Unmarshal([]byte(answer), &marshaled)
+		if erra != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		converted, _ := strconv.Atoi(marshaled["time"])
+
+		if (time.Now().Unix() - int64(converted)) > 300 {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
 		var captchaData map[string]string
 		err := json.Unmarshal([]byte(captchaD), &captchaData)
 		if err != nil {
@@ -612,14 +751,13 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		BucketHandlement(w, r)
 	case "POST":
+		dip := r.Header.Get("realip")
 		token := payload.Get("token") // generated token from bucket
 		if token == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
 		}
-
-		dip := r.Header.Get("realip")
 
 		removed, err := Redis_client.LRem(r.Context(), dip, 1, token).Result()
 
@@ -643,13 +781,26 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		BucketHandlement(w, r)
 	case "POST":
+		token := payload.Get("token") // generated token from bucket
 		sig := payload.Get("signature")
 		answer := payload.Get("answer")
 		verification := payload.Get("verification")
 		dip := payload.Get("realip")
 		password := payload.Get("password")
 		username := payload.Get("username")
-		if verification == "" || username == "" || password == "" || answer == "" || sig == "" {
+		if verification == "" || username == "" || password == "" || answer == "" || sig == "" || token == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		removed, err := Redis_client.LRem(r.Context(), dip, 1, token).Result()
+
+		if err != nil { // dont care if its server error or client bad request
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		} else if removed == 0 {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -775,12 +926,25 @@ func RegisterValidationJWT(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		BucketHandlement(w, r)
 	case "POST":
+		token := payload.Get("token")
 		sig := payload.Get("signature")
-		tok := payload.Get("answer")
+		answer := payload.Get("answer")
 		dip := payload.Get("realip")
 		username := payload.Get("username")
 		password := payload.Get("password")
-		if sig == "" || tok == "" || username == "" || password == "" {
+		if sig == "" || answer == "" || username == "" || password == "" || token == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		removed, err := Redis_client.LRem(r.Context(), dip, 1, token).Result()
+
+		if err != nil { // dont care if its server error or client bad request
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		} else if removed == 0 {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -798,7 +962,7 @@ func RegisterValidationJWT(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		summedJwt := sha256.Sum256([]byte(tok))
+		summedJwt := sha256.Sum256([]byte(answer))
 		decodedSig, erri := base64.StdEncoding.DecodeString(sig)
 		if erri != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -815,7 +979,7 @@ func RegisterValidationJWT(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var marshaled map[string]string
-		erro := json.Unmarshal([]byte(tok), &marshaled)
+		erro := json.Unmarshal([]byte(answer), &marshaled)
 		if erro != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
@@ -856,27 +1020,72 @@ func RegisterValidation(w http.ResponseWriter, r *http.Request) {
 		BucketHandlement(w, r)
 	case "POST":
 		captchaD := payload.Get("captchaAnswer")
+		sig := payload.Get("signature")
+		answer := payload.Get("answer")
 		email := payload.Get("email")
+		dip := payload.Get("realip")
+		token := payload.Get("token")
+		if captchaD == "" || sig == "" || answer == "" || email == "" || token == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+		}
+
+		removed, erro := Redis_client.LRem(r.Context(), dip, 1, token).Result()
+
+		if erro != nil { // dont care if its server error or client bad request
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		} else if removed == 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
 		if _, er := mail.ParseAddress(email); er != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
 		}
-		dip := payload.Get("realip")
-		var captchaData map[string]string
-		if captchaD != "" {
-			err := json.Unmarshal([]byte(captchaD), &captchaData)
-			if err != nil {
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte("Bad request"))
-				return
-			}
-			CaptchaToken(captchaData, email, w, dip, r)
-		} else {
+		summedJwt := sha256.Sum256([]byte(answer))
+		decodedSig, erri := base64.StdEncoding.DecodeString(sig)
+		if erri != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
 		}
+
+		verErr := rsa.VerifyPKCS1v15(PublicKey, crypto.SHA256, summedJwt[:], decodedSig)
+
+		if verErr != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		var marshaled map[string]string
+		erra := json.Unmarshal([]byte(answer), &marshaled)
+		if erra != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		converted, _ := strconv.Atoi(marshaled["time"])
+
+		if (time.Now().Unix() - int64(converted)) > 300 {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		var captchaData map[string]string
+		err := json.Unmarshal([]byte(captchaD), &captchaData)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		CaptchaToken(captchaData, email, w, dip, r)
 	}
 }
 
@@ -903,16 +1112,13 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		if err != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
-			return
 		} else if removed == 0 {
 			log.Println("Removed problem")
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
-			return
+		} else {
+			CaptchaGeneration(dip, w, r)
 		}
-
-		CaptchaGeneration(dip, w, r)
-
 	}
 }
 
@@ -921,20 +1127,41 @@ func CaptchaGeneration(dip string, w http.ResponseWriter, r *http.Request) {
 	captData, err := captcha.Generate()
 	if err != nil {
 		log.Fatalln(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Server error"))
+		return
 	}
 
 	dotData := captData.GetData()
 	if dotData == nil {
 		log.Fatalln("ERROR FOR CAPTCHA")
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Problem with server"))
+		w.Write([]byte("Server error"))
+		return
 	}
 
 	masterImage, _ := captData.GetMasterImage().ToBase64()
 	tileImage, _ := captData.GetTileImage().ToBase64()
+	buffTok := make([]byte, 32)
+	rand.Read(buffTok)
+	buffTokHex := hex.EncodeToString(buffTok)
+	answer := `{
+				"token": "` + buffTokHex + `",
+				"time": "` + fmt.Sprintf("%d", time.Now().Unix()) + `"
+			}`
+	summedAnswer := sha256.Sum256([]byte(answer))
+	signature, erri := rsa.SignPKCS1v15(rand.Reader, PrivateKey, crypto.SHA256, summedAnswer[:])
+	if erri != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Server error"))
+		return
+	}
+
 	jsoned := `{
 			"masterImage": "` + masterImage + `",
-			"titleImage": "` + tileImage + `"
+			"titleImage": "` + tileImage + `",
+			"signature": "` + base64.StdEncoding.EncodeToString(signature) + `",
+			"answer": ` + answer + `
 		}`
 	// we should have store the answer in some storage,
 	log.Println("This is the answer, X:", captData.GetData().X, ", Y:", captData.GetData().Y)
