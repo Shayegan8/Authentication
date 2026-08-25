@@ -105,7 +105,10 @@ func BucketHandlement(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if length == 0 {
-			Redis_client.LPush(r.Context(), dip, "in-queue")
+			pipeline := Redis_client.Pipeline()
+			pipeline.LPush(r.Context(), dip, "in-queue")
+			pipeline.Expire(r.Context(), dip, 5*time.Minute)
+			pipeline.Exec(r.Context())
 		}
 
 	}

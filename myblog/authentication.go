@@ -171,24 +171,38 @@ func ForgetPassword(w http.ResponseWriter, r *http.Request) { // dosen't require
 			newHashedPass := make([]byte, 32)
 			rand.Read(newHashedPass)
 			encodedHashedPass := hex.EncodeToString(newHashedPass)
-			_, err := Postgres_client.Exec(r.Context(), "UPDATE users SET password=$1 WHERE email=$2", newHashedPass, email)
+			hashedPassword, erri := bcrypt.GenerateFromPassword([]byte(encodedHashedPass), bcrypt.DefaultCost)
+			if erri != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("Server error"))
+				return
+			}
+
+			_, err := Postgres_client.Exec(r.Context(), "UPDATE users SET password=$1 WHERE email=$2", hashedPassword, email)
 			if err != nil {
-				rows.Close()
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte("Server error")) // Invalid user credintals
 				return
 			}
-			msg := []byte("To: " + email + "\r\n" +
-				"Subject: Shayegan's blog\r\n" +
-				"\r\n" +
-				"Heres your new password " + encodedHashedPass + ".\r\n")
-			err1 := smtp.SendMail("smtp.gmail.com:587", Auth, Config["user"], []string{email}, []byte(msg))
-			if err1 != nil {
+			chani := make(chan bool, 1)
+			go func() {
+				msg := []byte("To: " + email + "\r\n" +
+					"Subject: Shayegan's blog\r\n" +
+					"\r\n" +
+					"Heres your new password " + encodedHashedPass + ".\r\n")
+				err1 := smtp.SendMail("smtp.gmail.com:587", Auth, Config["user"], []string{email}, []byte(msg))
+				if err1 != nil {
+					chani <- false
+					return
+				}
+				chani <- true
+			}()
+			if <-chani {
+				w.WriteHeader(http.StatusAccepted)
+			} else {
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte("Problem with server"))
-				return
 			}
-			w.WriteHeader(http.StatusAccepted)
 			return
 		} else {
 			rows.Close()
@@ -332,8 +346,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		Verify(verification, password, email, dip, w, r)
-		Authing(email, email, password, verification, dip, w, r, false)
+		Verify(verification, email, password, email, dip, w, false, r)
 	}
 }
 
@@ -471,8 +484,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		Verify(verification, password, email, dip, w, r)
-		Authing(username, email, password, verification, dip, w, r, true)
+		Verify(verification, username, password, email, dip, w, true, r)
 	}
 }
 
@@ -565,7 +577,7 @@ func CaptchaToken(captchaData map[string]string, w http.ResponseWriter, dip stri
 	}
 }
 
-func Verify(verification string, password string, email string, dip string, w http.ResponseWriter, r *http.Request) {
+func Verify(verification string, username string, password string, email string, dip string, w http.ResponseWriter, registery bool, r *http.Request) {
 	if verification == "" {
 		if len(password) < 8 { // we just check length of password
 			w.WriteHeader(http.StatusBadRequest)
@@ -574,23 +586,28 @@ func Verify(verification string, password string, email string, dip string, w ht
 		}
 		// if the user was already in our storage means its login other
 		vcode := rnd.IntN(90000) + 10000
-		msg := []byte("To: " + email + "\r\n" +
-			"Subject: Shayegan's blog verification code\r\n" +
-			"\r\n" +
-			"Heres the code " + fmt.Sprint(vcode) + ".\r\n")
-		err := smtp.SendMail("smtp.gmail.com:587", Auth, Config["user"], []string{email}, []byte(msg))
-		if err != nil {
+		chani := make(chan bool, 1)
+		go func() {
+			msg := []byte("To: " + email + "\r\n" +
+				"Subject: Shayegan's blog verification code\r\n" +
+				"\r\n" +
+				"Heres the code " + fmt.Sprint(vcode) + ".\r\n")
+			err := smtp.SendMail("smtp.gmail.com:587", Auth, Config["user"], []string{email}, []byte(msg))
+			if err != nil {
+				chani <- false
+				return
+			}
+			chani <- true
+		}()
+		if <-chani {
+			Redis_client.Set(r.Context(), "captcha"+dip, vcode, 1*time.Minute)
+			w.WriteHeader(http.StatusAccepted)
+		} else {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Problem with sending email to you happened in server"))
-			return
 		}
-		Redis_client.Set(r.Context(), "captcha"+dip, vcode, 1*time.Minute)
-		w.WriteHeader(http.StatusAccepted)
-		fmt.Fprintf(w, "%d", vcode)
 	} else {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("Bad request"))
-		return
+		Authing(username, email, password, verification, dip, w, r, registery)
 	}
 }
 
