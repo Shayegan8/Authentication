@@ -65,11 +65,9 @@ func ForgetPassword(w http.ResponseWriter, r *http.Request) { // dosen't require
 		BucketHandlement("forget", w, r)
 	case "POST":
 		token := payload.Get("token") // generated token from bucket
-		sig := payload.Get("signature")
-		answer := payload.Get("answer")
 		dip := payload.Get("realip")
 
-		if token == "" || sig == "" || answer == "" {
+		if token == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -84,7 +82,7 @@ func ForgetPassword(w http.ResponseWriter, r *http.Request) { // dosen't require
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 		} else {
-			CaptchaGeneration(dip, w, r)
+			CaptchaGeneration(dip, "forgetPasswordValidation", w, r)
 		}
 	}
 }
@@ -98,9 +96,32 @@ func ForgetPasswordValidation(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		email := payload.Get("email")
 		token := payload.Get("token")
-		sig := payload.Get("signature")
-		answer := payload.Get("answer")
-		if email == "" || token == "" || answer == "" || sig == "" {
+		cookie, erroj := r.Cookie("forgetPasswordValidation")
+		decodedCookie, ear := base64.StdEncoding.DecodeString(cookie.Name)
+
+		if erroj != nil || ear != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		if email == "" || token == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		var decodedCookieMap map[string]string
+		errjo := json.Unmarshal(decodedCookie, &decodedCookieMap)
+		if errjo != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		sig := decodedCookieMap["signature"]
+		answer := decodedCookieMap["answer"]
+		if sig == "" || answer == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -164,7 +185,7 @@ func ForgetPasswordValidation(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-		CaptchaToken(captchaData, email, marshaled["token"], w, dip, r)
+		CaptchaToken(captchaData, "forgetPasswordValidationJWT", email, marshaled["token"], w, dip, r)
 	}
 }
 
@@ -175,10 +196,17 @@ func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
 		BucketHandlement("forgetValidationJWT", w, r)
 	case "POST":
 		dip := payload.Get("realip")
-		sig := payload.Get("signature")
-		answer := payload.Get("answer") // the same we gave them they should put it there
 		token := payload.Get("token")
-		if sig == "" || answer == "" || token == "" {
+		cookie, erroj := r.Cookie("forgetPasswordValidationJWT")
+		decodedCookie, ear := base64.StdEncoding.DecodeString(cookie.Name)
+
+		if erroj != nil || ear != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		if token == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -195,6 +223,20 @@ func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		var decodedCookieMap map[string]string
+		errwo := json.Unmarshal([]byte(decodedCookie), &decodedCookieMap)
+		if errwo != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		answer := decodedCookieMap["answer"]
+		sig := decodedCookieMap["signature"]
+		if answer == "" || sig == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
 		summedJwt := sha256.Sum256([]byte(answer))
 		decodedSig, erri := base64.StdEncoding.DecodeString(sig)
 		if erri != nil {
@@ -313,28 +355,60 @@ func ForgetPasswordChangeLink(w http.ResponseWriter, r *http.Request) {
 		} else {
 			tokBuffer := make([]byte, 16)
 			rand.Read(tokBuffer)
-			jsonAnswer := `{
+			jsonAnswer := `"{
 				"tok":"` + hex.EncodeToString(tokBuffer) + `",
 				"email": "` + email + `",
 				"time": "` + fmt.Sprintf("%d", time.Now().Unix()) + `"
-			}`
+			}"`
 			summed := sha256.Sum256([]byte(jsonAnswer))
 			signature, _ := rsa.SignPKCS1v15(rand.Reader, PrivateKey, crypto.SHA256, summed[:])
-			w.Header().Set("content-type", "application/json")
-			w.WriteHeader(http.StatusAccepted)
-			w.Write([]byte(`{
+			http.SetCookie(w, &http.Cookie{
+				Name: "forgetPasswordChangeLink",
+				Value: base64.StdEncoding.EncodeToString([]byte(`{
 				"answer": ` + jsonAnswer + `,
 				"signature": "` + base64.StdEncoding.EncodeToString(signature) + `"
-			}`))
+			}`)),
+				HttpOnly: true,
+				Secure:   true,
+				SameSite: http.SameSiteStrictMode,
+				Path:     "/auth", // Only sent to auth endpoints
+				MaxAge:   300,     // 5 minutes matching your timestamp check
+			})
+			w.WriteHeader(http.StatusAccepted)
 		}
 	case "POST":
 		if !rateLimiter(dip, "forgetLink", w, r) {
 			return
 		}
 		password := payload.Get("password")
-		sig := payload.Get("signature")
-		answer := payload.Get("answer")
-		if password == "" || sig == "" || answer == "" {
+		answerCookie, erria := r.Cookie("forgetPasswordChangeLink")
+		if erria != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		decoded, eroz := base64.StdEncoding.DecodeString(answerCookie.Value)
+		if eroz != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		var decodedMap map[string]string
+		erriq := json.Unmarshal(decoded, &decodedMap)
+		if erriq != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		sig := decodedMap["signature"]
+		answer := decodedMap["answer"]
+		if sig == "" || answer == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		if password == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -367,9 +441,14 @@ func ForgetPasswordChangeLink(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		var answerMap map[string]string
-		json.Unmarshal([]byte(answer), &answerMap)
-		converted, _ := strconv.Atoi(answerMap["time"])
+		var decodedAnswer map[string]string
+		eoo := json.Unmarshal([]byte(answer), &decodedAnswer)
+		if eoo != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		converted, _ := strconv.Atoi(decodedAnswer["time"])
 
 		if (time.Now().Unix() - int64(converted)) > 300 {
 			w.WriteHeader(http.StatusBadRequest)
@@ -384,7 +463,7 @@ func ForgetPasswordChangeLink(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		oo, er := Postgres_client.Exec(r.Context(), "UPDATE users SET password=$1 WHERE email=$2", hashedPassword, answerMap["email"])
+		oo, er := Postgres_client.Exec(r.Context(), "UPDATE users SET password=$1 WHERE email=$2", hashedPassword, decodedAnswer["email"])
 		if er != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
@@ -404,13 +483,11 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		BucketHandlement("loginValidationSubmit", w, r)
 	case "POST":
-		sig := payload.Get("signature")
-		answer := payload.Get("answer")
 		password := payload.Get("password")
 		verification := payload.Get("verification")
 		token := payload.Get("token")
 
-		if sig == "" || answer == "" || password == "" || verification == "" || token == "" {
+		if password == "" || verification == "" || token == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -435,6 +512,33 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if len(password) < 8 || !strings.ContainsAny(password, "ABCDEFGHIKJLMNOPQRSTUVWXYZ") || !strings.ContainsAny(password, "abcdefghikjlmnopqrstuvwxyz") || !strings.ContainsAny(password, "0123456789") || !strings.ContainsAny(password, "!@#$%^&*()-_+") {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		answerCookie, erria := r.Cookie("loginValidationJWT")
+		if erria != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		decoded, eroz := base64.StdEncoding.DecodeString(answerCookie.Value)
+		if eroz != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		var decodedMap map[string]string
+		erriq := json.Unmarshal(decoded, &decodedMap)
+		if erriq != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		sig := decodedMap["signature"]
+		answer := decodedMap["answer"]
+		if sig == "" || answer == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -552,14 +656,20 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			response := `{
+			http.SetCookie(w, &http.Cookie{
+				Name: "userData",
+				Value: base64.StdEncoding.EncodeToString([]byte(`{
 					"userid": "` + userid + `,
 					"refreshToken": "` + refreshTokenHex + `"
-				}`
+				}`)),
+				HttpOnly: true,
+				Secure:   true,
+				SameSite: http.SameSiteStrictMode,
+				Path:     "/auth", // Only sent to auth endpoints
+				MaxAge:   0,
+			})
 
-			w.Header().Set("content-type", "application/json")
 			w.WriteHeader(http.StatusAccepted)
-			w.Write([]byte(response))
 			return
 		} else {
 			rows.Close()
@@ -577,12 +687,10 @@ func LoginValidationJWT(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		BucketHandlement("loginValidationJWT", w, r)
 	case "POST":
-		sig := payload.Get("signature")
-		answer := payload.Get("answer")
 		password := payload.Get("password")
 		token := payload.Get("token")
 
-		if sig == "" || answer == "" || password == "" || token == "" {
+		if password == "" || token == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -611,6 +719,34 @@ func LoginValidationJWT(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
+
+		answerCookie, erria := r.Cookie("loginValidationJWT")
+		if erria != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		decoded, eroz := base64.StdEncoding.DecodeString(answerCookie.Value)
+		if eroz != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		var decodedMap map[string]string
+		erriq := json.Unmarshal(decoded, &decodedMap)
+		if erriq != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		sig := decodedMap["signature"]
+		answer := decodedMap["answer"]
+		if sig == "" || answer == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
 		summedJwt := sha256.Sum256([]byte(answer))
 		decodedSig, erri := base64.StdEncoding.DecodeString(sig)
 		if erri != nil {
@@ -683,12 +819,10 @@ func LoginValidation(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		email := payload.Get("email")
 		captchaD := payload.Get("captchaAnswer")
-		sig := payload.Get("signature")
-		answer := payload.Get("answer")
 		dip := payload.Get("realip")
 		token := payload.Get("token")
 
-		if email == "" || captchaD == "" || sig == "" || answer == "" || token == "" {
+		if email == "" || captchaD == "" || token == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -707,6 +841,33 @@ func LoginValidation(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if _, er := mail.ParseAddress(email); er != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		answerCookie, erria := r.Cookie("loginValidation")
+		if erria != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		decoded, eroz := base64.StdEncoding.DecodeString(answerCookie.Value)
+		if eroz != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		var decodedMap map[string]string
+		erriq := json.Unmarshal(decoded, &decodedMap)
+		if erriq != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		sig := decodedMap["signature"]
+		answer := decodedMap["answer"]
+		if sig == "" || answer == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -750,7 +911,7 @@ func LoginValidation(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-		CaptchaToken(captchaData, email, marshaled["token"], w, dip, r)
+		CaptchaToken(captchaData, "loginValidationJWT", email, marshaled["token"], w, dip, r)
 	}
 }
 
@@ -780,7 +941,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		CaptchaGeneration(dip, w, r)
+		CaptchaGeneration(dip, "loginValidation", w, r)
 	}
 }
 
@@ -791,13 +952,11 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 		BucketHandlement("registerValidationSubmit", w, r)
 	case "POST":
 		token := payload.Get("token") // generated token from bucket
-		sig := payload.Get("signature")
-		answer := payload.Get("answer")
 		verification := payload.Get("verification")
 		dip := payload.Get("realip")
 		password := payload.Get("password")
 		username := payload.Get("username")
-		if verification == "" || username == "" || password == "" || answer == "" || sig == "" || token == "" {
+		if verification == "" || username == "" || password == "" || token == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -822,6 +981,33 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if len(password) < 8 || !strings.ContainsAny(password, "ABCDEFGHIKJLMNOPQRSTUVWXYZ") || !strings.ContainsAny(password, "abcdefghikjlmnopqrstuvwxyz") || !strings.ContainsAny(password, "0123456789") || !strings.ContainsAny(password, "!@#$%^&*()-_+") {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		answerCookie, erria := r.Cookie("registerValidationJWT")
+		if erria != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		decoded, eroz := base64.StdEncoding.DecodeString(answerCookie.Value)
+		if eroz != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		var decodedMap map[string]string
+		erriq := json.Unmarshal(decoded, &decodedMap)
+		if erriq != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		sig := decodedMap["signature"]
+		answer := decodedMap["answer"]
+		if sig == "" || answer == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -925,14 +1111,21 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			var userid string
 			query.Scan(&userid)
 			query.Close()
-			response := `{
-					"userid": "` + userid + `",
-					"refreshToken": "` + refreshTokenHex + `"
-				}`
 			// give token and write success
-			w.Header().Set("content-type", "application/json")
+			http.SetCookie(w, &http.Cookie{
+				Name: "userData",
+				Value: base64.StdEncoding.EncodeToString([]byte(`{
+					"userid": "` + userid + `,
+					"refreshToken": "` + refreshTokenHex + `"
+				}`)),
+				HttpOnly: true,
+				Secure:   true,
+				SameSite: http.SameSiteStrictMode,
+				Path:     "/auth", // Only sent to auth endpoints
+				MaxAge:   0,
+			})
+
 			w.WriteHeader(http.StatusAccepted)
-			w.Write([]byte(response))
 		}
 	}
 }
@@ -944,12 +1137,10 @@ func RegisterValidationJWT(w http.ResponseWriter, r *http.Request) {
 		BucketHandlement("registerValidationJWT", w, r)
 	case "POST":
 		token := payload.Get("token")
-		sig := payload.Get("signature")
-		answer := payload.Get("answer")
 		dip := payload.Get("realip")
 		username := payload.Get("username")
 		password := payload.Get("password")
-		if sig == "" || answer == "" || username == "" || password == "" || token == "" {
+		if username == "" || password == "" || token == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -974,6 +1165,33 @@ func RegisterValidationJWT(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if len(password) < 8 || !strings.ContainsAny(password, "ABCDEFGHIKJLMNOPQRSTUVWXYZ") || !strings.ContainsAny(password, "abcdefghikjlmnopqrstuvwxyz") || !strings.ContainsAny(password, "0123456789") || !strings.ContainsAny(password, "!@#$%^&*()-_+") {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		answerCookie, erria := r.Cookie("registerValidationJWT")
+		if erria != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		decoded, eroz := base64.StdEncoding.DecodeString(answerCookie.Value)
+		if eroz != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		var decodedMap map[string]string
+		erriq := json.Unmarshal(decoded, &decodedMap)
+		if erriq != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		sig := decodedMap["signature"]
+		answer := decodedMap["answer"]
+		if sig == "" || answer == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -1037,12 +1255,10 @@ func RegisterValidation(w http.ResponseWriter, r *http.Request) {
 		BucketHandlement("registerValidation", w, r)
 	case "POST":
 		captchaD := payload.Get("captchaAnswer")
-		sig := payload.Get("signature")
-		answer := payload.Get("answer")
 		email := payload.Get("email")
 		dip := payload.Get("realip")
 		token := payload.Get("token")
-		if captchaD == "" || sig == "" || answer == "" || email == "" || token == "" {
+		if captchaD == "" || email == "" || token == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 		}
@@ -1064,6 +1280,34 @@ func RegisterValidation(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
+
+		answerCookie, erria := r.Cookie("registerValidation")
+		if erria != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		decoded, eroz := base64.StdEncoding.DecodeString(answerCookie.Value)
+		if eroz != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		var decodedMap map[string]string
+		erriq := json.Unmarshal(decoded, &decodedMap)
+		if erriq != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		sig := decodedMap["signature"]
+		answer := decodedMap["answer"]
+		if sig == "" || answer == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
 		summedJwt := sha256.Sum256([]byte(answer))
 		decodedSig, erri := base64.StdEncoding.DecodeString(sig)
 		if erri != nil {
@@ -1102,7 +1346,7 @@ func RegisterValidation(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-		CaptchaToken(captchaData, email, marshaled["token"], w, dip, r)
+		CaptchaToken(captchaData, "registerValidationJWT", email, marshaled["token"], w, dip, r)
 	}
 }
 
@@ -1134,12 +1378,12 @@ func Register(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 		} else {
-			CaptchaGeneration(dip, w, r)
+			CaptchaGeneration(dip, "registerValidation", w, r)
 		}
 	}
 }
 
-func CaptchaGeneration(dip string, w http.ResponseWriter, r *http.Request) {
+func CaptchaGeneration(dip string, name string, w http.ResponseWriter, r *http.Request) {
 	captcha := Init()
 	captData, err := captcha.Generate()
 	if err != nil {
@@ -1162,10 +1406,10 @@ func CaptchaGeneration(dip string, w http.ResponseWriter, r *http.Request) {
 	buffTok := make([]byte, 32)
 	rand.Read(buffTok)
 	buffTokHex := hex.EncodeToString(buffTok)
-	answer := `{
+	answer := `"{
 				"token": "` + buffTokHex + `",
 				"time": "` + fmt.Sprintf("%d", time.Now().Unix()) + `"
-			}`
+			}"`
 	summedAnswer := sha256.Sum256([]byte(answer))
 	signature, erri := rsa.SignPKCS1v15(rand.Reader, PrivateKey, crypto.SHA256, summedAnswer[:])
 	if erri != nil {
@@ -1174,21 +1418,29 @@ func CaptchaGeneration(dip string, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsoned := `{
-			"masterImage": "` + masterImage + `",
-			"titleImage": "` + tileImage + `",
-			"signature": "` + base64.StdEncoding.EncodeToString(signature) + `",
-			"answer": ` + answer + `
-		}`
 	// we should have store the answer in some storage,
 	log.Println("This is the answer, X:", captData.GetData().X, ", Y:", captData.GetData().Y)
 	Redis_client.Set(r.Context(), "captcha"+dip+buffTokHex, fmt.Sprintf("%d,%d", captData.GetData().X, captData.GetData().Y), 1*time.Minute)
-	w.Header().Set("content-type", "application/json")
+	http.SetCookie(w, &http.Cookie{
+		Name: name,
+		Value: base64.StdEncoding.EncodeToString([]byte(`{
+			"signature": "` + base64.StdEncoding.EncodeToString(signature) + `",
+			"answer": ` + answer + `
+		}`)),
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+		Path:     "/auth", // Only sent to auth endpoints
+		MaxAge:   5,
+	})
+	w.Write([]byte(`{
+		"masterImage": "` + masterImage + `",
+		"titleImage": "` + tileImage + `"
+	}`))
 	w.WriteHeader(http.StatusAccepted)
-	w.Write([]byte(jsoned))
 }
 
-func CaptchaToken(captchaData map[string]string, email string, token string, w http.ResponseWriter, dip string, r *http.Request) {
+func CaptchaToken(captchaData map[string]string, name string, email string, token string, w http.ResponseWriter, dip string, r *http.Request) {
 	x, err := strconv.Atoi(captchaData["x"])
 	if err != nil { // this blocks are for testing and might be removed or above code might be changed
 		w.WriteHeader(http.StatusBadRequest)
@@ -1226,19 +1478,27 @@ func CaptchaToken(captchaData map[string]string, email string, token string, w h
 		rand.Read(buff)
 		tok := hex.EncodeToString(buff)
 		//jwt
-		jsonAnswer := `{
+		jsonAnswer := `"{
 				"tok":"` + tok + `",
 				"email":"` + email + `",
 				"time":"` + fmt.Sprintf("%d", time.Now().Unix()) + `"
-			}`
+			}"`
 		summed := sha256.Sum256([]byte(jsonAnswer))
 		signature, _ := rsa.SignPKCS1v15(rand.Reader, PrivateKey, crypto.SHA256, summed[:])
-		w.Header().Set("content-type", "application/json")
-		w.WriteHeader(http.StatusAccepted)
-		w.Write([]byte(`{
+		http.SetCookie(w, &http.Cookie{
+			Name: name,
+			Value: base64.StdEncoding.EncodeToString([]byte(`{
 				"answer": ` + jsonAnswer + `,
 				"signature": "` + base64.StdEncoding.EncodeToString(signature) + `"
-			}`))
+			}`)),
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteStrictMode,
+			Path:     "/auth", // Only sent to auth endpoints
+			MaxAge:   5,
+		})
+
+		w.WriteHeader(http.StatusAccepted)
 		return
 	} else {
 		w.WriteHeader(http.StatusBadRequest)
