@@ -16,7 +16,6 @@ and tunnel them with a reverse proxy (ngnix)
 */
 
 import (
-	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	_ "embed"
@@ -31,26 +30,65 @@ import (
 	"github.com/gorilla/mux"
 )
 
+func SecurityHandlers(router http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		/*
+			Telling browser contents information, they should come from these
+			   w.Header().Set("Content-Security-Policy",
+			       "default-src 'self'; " +
+			       "script-src 'self' https://trusted-cdn.com; " +
+			       "style-src 'self' 'unsafe-inline'; " +
+			       "img-src 'self' data: https:; " +
+			       "font-src 'self' https://fonts.gstatic.com; " +
+			       "frame-ancestors 'none';")
+		*/
+		w.Header().Set("x-frame-options", "DENY") // click hijacking preventation
+		w.Header().Set("Strict-Transport-Security",
+			"max-age=31536000; includeSubDomains; preload") // https only
+		w.Header().Set("X-Content-Type-Options", "nosniff") // like i have an image but browser without this will think images are json
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Permissions-Policy",
+			"camera=(), microphone=(), geolocation=(), payment=()") // allowing nothing
+		router.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	json.Unmarshal(myblog.ConfigBuffer, &myblog.Config)
 	myblog.InitRDB()
 	myblog.InitPDB()
 	// userid, email, username, password, refreshToken, login, timestamp
-	myblog.Postgres_client.Query(context.Background(),
-		`CREATE TABLE IF NOT EXIST users(uuid UUID PRIMARY KEY, email VARCHAR(255),
-		 username VARCHAR(50), password BYTEA, refreshToken VARCHAR(64), login BOOLEAN, timestamp BIGINT)`,
-	)
+
 	router := mux.NewRouter()
 
 	myblog.Auth = smtp.PlainAuth("", myblog.Config["user"], myblog.Config["password"], "smtp.gmail.com")
 	router.HandleFunc("/login", myblog.Login)
+	router.HandleFunc("/login/validation", myblog.LoginValidation)
+	router.HandleFunc("/login/validation/jwt", myblog.LoginValidationJWT)
+	router.HandleFunc("/login/validation/submit", myblog.LoginValidationSubmit)
 	router.HandleFunc("/register", myblog.Register)
+	router.HandleFunc("/register/validation", myblog.RegisterValidation)
+	router.HandleFunc("/register/validation/jwt", myblog.RegisterValidationJWT)
+	router.HandleFunc("/register/validation/submit", myblog.RegisterValidationSubmit)
 	router.HandleFunc("/forgetPassword", myblog.ForgetPassword)
 	router.HandleFunc("/forgetPassword/validate", myblog.ForgetPasswordValidation)
 	router.HandleFunc("/forgetPassword/validate/jwt", myblog.ForgetPasswordValidationJWT)
-	router.HandleFunc("/forgetPassword/${key}", myblog.ForgetPasswordChangeLink)
+	router.HandleFunc("/forgetPassword/{key}", myblog.ForgetPasswordChangeLink)
 
 	rrouter := handlers.LoggingHandler(os.Stdout, router)
+	rrouter = SecurityHandlers(rrouter)
+	rrrouter := handlers.CORS(handlers.AllowedOrigins([]string{"http://127.0.0.1:5132"}), handlers.AllowCredentials(), handlers.AllowedHeaders([]string{
+		"signature",
+		"answer",
+		"token",
+		"realip",
+		"captchaAnswer",
+		"content-type",
+		"verification",
+		"username",
+		"password",
+		"email",
+	}), handlers.AllowedMethods([]string{"GET", "POST", "OPTIONS"}))(rrouter)
 
 	key, _ := rsa.GenerateKey(rand.Reader, 2048)
 
@@ -58,7 +96,7 @@ func main() {
 	myblog.PublicKey = &key.PublicKey
 
 	server := &http.Server{
-		Handler:      rrouter,
+		Handler:      rrrouter,
 		Addr:         "127.0.0.1:1234",
 		WriteTimeout: 30 * time.Second,
 		ReadTimeout:  30 * time.Second,
