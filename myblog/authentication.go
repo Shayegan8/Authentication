@@ -251,7 +251,6 @@ func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			chani := make(chan bool, 1)
 			go func() {
 				msg := []byte("To: " + marshaled["email"] + "\r\n" +
 					"Subject: Shayegan's blog\r\n" +
@@ -259,23 +258,14 @@ func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
 					"Click this link to change your password <a href=\"https://myhostnameididntgetyet.ir/auth/forget/\">https://myhostnameididntgetyet.ir/auth/forget/" + key + "</a>.\r\n")
 				err1 := smtp.SendMail("smtp.gmail.com:587", Auth, Config["user"], []string{marshaled["email"]}, []byte(msg))
 				if err1 != nil {
-					chani <- false
-					return
+					log.Println("Problem with smtp server", err1)
 				}
-				chani <- true
 			}()
-			if <-chani {
-				w.WriteHeader(http.StatusAccepted)
-			} else {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte("Problem with server"))
-			}
-			return
+			w.WriteHeader(http.StatusAccepted)
 		} else {
 			rows.Close()
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request")) // Invalid user credintals
-			return
 		}
 	}
 }
@@ -517,7 +507,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-		rows, errio := Postgres_client.Query(r.Context(), "SELECT refreshToken, userid, password FROM users WHERE email=$2")
+		rows, errio := Postgres_client.Query(r.Context(), "SELECT refreshToken, userid, password FROM users WHERE email=$1", marshaled["email"])
 		if errio != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
@@ -1134,7 +1124,7 @@ func CaptchaGeneration(dip string, w http.ResponseWriter, r *http.Request) {
 	captcha := Init()
 	captData, err := captcha.Generate()
 	if err != nil {
-		log.Fatalln(err)
+		log.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Server error"))
 		return
@@ -1142,7 +1132,7 @@ func CaptchaGeneration(dip string, w http.ResponseWriter, r *http.Request) {
 
 	dotData := captData.GetData()
 	if dotData == nil {
-		log.Fatalln("ERROR FOR CAPTCHA")
+		log.Println("ERROR FOR CAPTCHA")
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Server error"))
 		return
@@ -1239,7 +1229,6 @@ func CaptchaToken(captchaData map[string]string, email string, w http.ResponseWr
 func Verify(email string, dip string, w http.ResponseWriter, r *http.Request) {
 	// if the user was already in our storage means its login other
 	vcode := rnd.IntN(90000) + 10000
-	chani := make(chan bool, 1)
 	go func() {
 		msg := []byte("To: " + email + "\r\n" +
 			"Subject: Shayegan's blog verification code\r\n" +
@@ -1247,16 +1236,9 @@ func Verify(email string, dip string, w http.ResponseWriter, r *http.Request) {
 			"Heres the code " + fmt.Sprint(vcode) + ".\r\n")
 		err := smtp.SendMail("smtp.gmail.com:587", Auth, Config["user"], []string{email}, []byte(msg))
 		if err != nil {
-			chani <- false
-			return
+			log.Println("Problem with smtp server:", err)
 		}
-		chani <- true
 	}()
-	if <-chani {
-		Redis_client.Set(r.Context(), "captcha"+dip, vcode, 3*time.Minute)
-		w.WriteHeader(http.StatusAccepted)
-	} else {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Server error"))
-	}
+	Redis_client.Set(r.Context(), "captcha"+dip, vcode, 3*time.Minute)
+	w.WriteHeader(http.StatusAccepted)
 }
