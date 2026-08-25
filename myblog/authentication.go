@@ -229,7 +229,11 @@ func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
 
 		rows, erra := Postgres_client.Query(r.Context(), "SELECT * FROM users WHERE email=$1", marshaled["email"])
 		if erra != nil {
-			rows.Close()
+			if erra == redis.Nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("Bad request")) // Invalid user credintals
+				return
+			}
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error")) // Invalid user credintals
 			return
@@ -509,6 +513,11 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 		}
 		rows, errio := Postgres_client.Query(r.Context(), "SELECT refreshToken, userid, password FROM users WHERE email=$1", marshaled["email"])
 		if errio != nil {
+			if errio == redis.Nil {
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte("Bad request"))
+				return
+			}
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
 			return
@@ -636,16 +645,16 @@ func LoginValidationJWT(w http.ResponseWriter, r *http.Request) {
 		rows, erra := Postgres_client.Query(r.Context(), "SELECT password FROM users WHERE email=$1", marshaled["email"])
 
 		if erra != nil {
+			if erra == redis.Nil {
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte("Bad request")) // Invalid user credintals
+				return
+			}
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error")) // Invalid user credintals
 			return
 		}
-		if !rows.Next() {
-			rows.Close()
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request")) // Invalid user credintals
-			return
-		} else {
+		if rows.Next() {
 			var hashedPass []byte
 			erri := rows.Scan(&hashedPass)
 			rows.Close()
@@ -902,12 +911,19 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			"INSERT INTO users(email, username, password, refreshToken)"+
 				" VALUES ($1, $2, $3, $4) RETURNING userid", marshaled["email"], username, hashedPassword, refreshTokenHex)
 		if err != nil {
+			// this isnt possible but anyway
+			if err == redis.Nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("Bad request"))
+				return
+			}
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 		}
 		if query.Next() {
 			var userid string
 			query.Scan(&userid)
+			query.Close()
 			response := `{
 					"userid": "` + userid + `",
 					"refreshToken": "` + refreshTokenHex + `"
