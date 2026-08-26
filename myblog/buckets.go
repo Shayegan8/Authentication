@@ -27,8 +27,17 @@ func GenerateBucket(n int) []string {
 
 var l = log.Println
 
+/*
+Ok we rate limit better
+we use useragent too (they can be changed but even that we cant be fucked cause of this limit)
+possibility of having same dynamic ip and same user agent is too low even if they get ratelimit at same time its just 30s
+and we also check for a userData cookie if it was exist we just rate limit with the user data then like i dont know their email?
+their token? well we use the token, so we sign the tokens too for best practice to not making others transpass this area
+*/
 func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *http.Request) {
 	dip := r.Header.Get("realip")
+	userData, erro := r.Cookie("userData")
+
 	_, err := r.Cookie(name)
 	if err != nil { // means such a cookie not exist
 		l("shit1")
