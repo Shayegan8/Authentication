@@ -128,18 +128,16 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 		l("shit1")
 
 		var counter int64
-		var err error
 
+		pipe := Redis_client.Pipeline()
 		if email == "" {
-			counter, err = Redis_client.Incr(r.Context(), "counter"+name+dip).Result()
+			counter, _ = pipe.Incr(r.Context(), "counter"+name+dip).Result()
+			pipe.Expire(r.Context(), "counter"+name+dip, 30*time.Second)
 		} else {
-			counter, err = Redis_client.Incr(r.Context(), "counter"+email).Result()
+			counter, _ = pipe.Incr(r.Context(), "counter"+email).Result()
+			pipe.Expire(r.Context(), "counter"+email, 30*time.Second)
 		}
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-			return
-		}
+		pipe.Exec(r.Context())
 		l("Whats the counter:", counter)
 		if counter == 1 {
 			if email == "" {
@@ -164,7 +162,7 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 		}
 
 		redis_pipe.Exec(r.Context())
-		token, err := Redis_client.LIndex(r.Context(), name+dip, -1).Result()
+		token, _ := Redis_client.LIndex(r.Context(), name+dip, -1).Result()
 		http.SetCookie(w, &http.Cookie{
 			Name:     name,
 			Value:    token,
@@ -178,17 +176,16 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 		return
 	} else {
 		var counter int64
-		var err error
+
+		pipe := Redis_client.Pipeline()
 		if email == "" {
-			counter, err = Redis_client.Incr(r.Context(), "counter"+name+dip).Result()
+			counter, _ = pipe.Incr(r.Context(), "counter"+name+dip).Result()
+			pipe.Expire(r.Context(), "counter"+name+dip, 30*time.Second)
 		} else {
-			counter, err = Redis_client.Incr(r.Context(), "counter"+email).Result()
+			counter, _ = pipe.Incr(r.Context(), "counter"+email).Result()
+			pipe.Expire(r.Context(), "counter"+email, 30*time.Second)
 		}
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-			return
-		}
+		pipe.Exec(r.Context())
 
 		if counter > 10 {
 			w.WriteHeader(http.StatusBadRequest)
@@ -197,6 +194,7 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 		}
 		var result string
 		var length int64
+		var err error
 		if email == "" {
 			result, err = Redis_client.LIndex(r.Context(), name+dip, -1).Result()
 			length, err = Redis_client.LLen(r.Context(), name+dip).Result()

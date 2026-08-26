@@ -361,9 +361,11 @@ func ForgetPasswordChangeLink(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
+			return
 		} else if email == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
+			return
 		} else {
 			tokBuffer := make([]byte, 16)
 			rand.Read(tokBuffer)
@@ -619,10 +621,14 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 				w.Write([]byte("Server error"))
 				return
 			}
-			if verificationCode != vercode {
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte("Bad request"))
-				return
+			if verificationCode == vercode {
+				_, errr := Redis_client.Del(r.Context(), marshaled["email"]).Result()
+				_, era := Redis_client.Del(r.Context(), "counter"+marshaled["email"]).Result()
+				if errr != nil || era != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					w.Write([]byte("Server error")) // i dont think this happens, anyway
+					return
+				}
 			} else {
 				if count == 10 {
 					_, errr := Redis_client.Del(r.Context(), marshaled["email"]).Result()
@@ -636,6 +642,8 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 					w.Write([]byte("Blocked"))
 					return
 				}
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte("Bad request"))
 			}
 		} else {
 			w.WriteHeader(http.StatusBadRequest)
@@ -818,29 +826,7 @@ func LoginValidationJWT(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		rows, erra := Postgres_client.Query(r.Context(), "SELECT password FROM users WHERE email=$1", marshaled["email"])
-
-		if erra != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error")) // Invalid user credintals
-			return
-		}
-		if rows.Next() {
-			var hashedPass []byte
-			erri := rows.Scan(&hashedPass)
-			rows.Close()
-			if erri != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte("Server error")) // Invalid user credintals
-				return
-			}
-			err := bcrypt.CompareHashAndPassword(hashedPass, []byte(password))
-			if err == nil {
-				Verify(marshaled["email"], "loginValidationSubmit", "login/validation/submit", w, r)
-			} else {
-				w.WriteHeader(http.StatusAccepted)
-			}
-		}
+		Verify(marshaled["email"], "loginValidationSubmit", "login/validation/submit", w, r)
 	}
 }
 
@@ -1120,10 +1106,14 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 				w.Write([]byte("Server error"))
 				return
 			}
-			if verificationCode != vercode {
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte("Bad request"))
-				return
+			if verificationCode == vercode {
+				_, errr := Redis_client.Del(r.Context(), marshaled["email"]).Result()
+				_, era := Redis_client.Del(r.Context(), "counter"+marshaled["email"]).Result()
+				if errr != nil || era != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					w.Write([]byte("Server error")) // i dont think this happens, anyway
+					return
+				}
 			} else {
 				if count == 10 {
 					_, errr := Redis_client.Del(r.Context(), marshaled["email"]).Result()
@@ -1137,6 +1127,8 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 					w.Write([]byte("Blocked"))
 					return
 				}
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte("Bad request"))
 			}
 		} else {
 			w.WriteHeader(http.StatusBadRequest)
@@ -1157,11 +1149,6 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 				" VALUES ($1, $2, $3, $4) RETURNING userid", marshaled["email"], username, hashedPassword, refreshToken)
 		if err != nil {
 			// this isnt possible but anyway
-			if err == redis.Nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte("Bad request"))
-				return
-			}
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 		}
@@ -1306,19 +1293,7 @@ func RegisterValidationJWT(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		rows, erra := Postgres_client.Query(r.Context(), "SELECT * FROM users WHERE email=$1 OR username=$2", marshaled["email"], username)
-		if erra != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error")) // Invalid user credintals
-			return
-		}
-
-		if rows.Next() { // this means if the user with this details actually exist we should do nothing
-			rows.Close()
-			w.WriteHeader(http.StatusAccepted)
-		} else {
-			Verify(marshaled["email"], "registerValidationSubmit", "register/validation/submit", w, r)
-		}
+		Verify(marshaled["email"], "registerValidationSubmit", "register/validation/submit", w, r)
 	}
 }
 
@@ -1341,6 +1316,7 @@ func RegisterValidation(w http.ResponseWriter, r *http.Request) {
 		if captchaD == "" || email == "" || token == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
+			return
 		}
 
 		removed, erro := Redis_client.LRem(r.Context(), "registerV"+dip, 1, token).Result()
