@@ -82,7 +82,7 @@ func ForgetPassword(w http.ResponseWriter, r *http.Request) { // dosen't require
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 		} else {
-			CaptchaGeneration(dip, "forgetPasswordValidation", w, r)
+			CaptchaGeneration(dip, "forgetPasswordValidation", "forgetPassword/validation", w, r)
 		}
 	}
 }
@@ -185,7 +185,7 @@ func ForgetPasswordValidation(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-		CaptchaToken(captchaData, "forgetPasswordValidationJWT", email, marshaled["token"], w, dip, r)
+		CaptchaToken(captchaData, "forgetPasswordValidationJWT", "forgetPassword/validation/jwt", "", email, marshaled["token"], w, dip, r)
 	}
 }
 
@@ -911,7 +911,7 @@ func LoginValidation(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-		CaptchaToken(captchaData, "loginValidationJWT", "login/validation", email, marshaled["token"], w, dip, r)
+		CaptchaToken(captchaData, "loginValidationJWT", "login/validation/jwt", "login/validation/submit", email, marshaled["token"], w, dip, r)
 	}
 }
 
@@ -941,7 +941,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		CaptchaGeneration(dip, "loginValidation", w, r)
+		CaptchaGeneration(dip, "loginValidation", "login/validation", w, r)
 	}
 }
 
@@ -1346,7 +1346,7 @@ func RegisterValidation(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-		CaptchaToken(captchaData, "registerValidationJWT", "register/validation", email, marshaled["token"], w, dip, r)
+		CaptchaToken(captchaData, "registerValidationJWT", "register/validation/jwt", "register/validation/submit", email, marshaled["token"], w, dip, r)
 	}
 }
 
@@ -1378,7 +1378,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 		} else {
-			CaptchaGeneration(dip, "registerValidation", "register", w, r)
+			CaptchaGeneration(dip, "registerValidation", "register/validation", w, r)
 		}
 	}
 }
@@ -1440,7 +1440,7 @@ func CaptchaGeneration(dip string, name string, endpoint string, w http.Response
 	w.WriteHeader(http.StatusAccepted)
 }
 
-func CaptchaToken(captchaData map[string]string, name string, endpoint string, email string, token string, w http.ResponseWriter, dip string, r *http.Request) {
+func CaptchaToken(captchaData map[string]string, name string, endpoint string, endpoint2 string, email string, token string, w http.ResponseWriter, dip string, r *http.Request) {
 	x, err := strconv.Atoi(captchaData["x"])
 	if err != nil { // this blocks are for testing and might be removed or above code might be changed
 		w.WriteHeader(http.StatusBadRequest)
@@ -1497,7 +1497,20 @@ func CaptchaToken(captchaData map[string]string, name string, endpoint string, e
 			Path:     "/auth/" + endpoint, // Only sent to auth endpoints
 			MaxAge:   5,
 		})
-
+		if endpoint2 != "" {
+			http.SetCookie(w, &http.Cookie{
+				Name: name,
+				Value: base64.StdEncoding.EncodeToString([]byte(`{
+				"answer": ` + jsonAnswer + `,
+				"signature": "` + base64.StdEncoding.EncodeToString(signature) + `"
+			}`)),
+				HttpOnly: true,
+				Secure:   true,
+				SameSite: http.SameSiteStrictMode,
+				Path:     "/auth/" + endpoint2, // Only sent to auth endpoints
+				MaxAge:   5,
+			})
+		}
 		w.WriteHeader(http.StatusAccepted)
 		return
 	} else {
