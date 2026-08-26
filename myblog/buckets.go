@@ -104,8 +104,27 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 		}
 
 	}
-	_, err := r.Cookie(name)
-	if err != nil { // means such a cookie not exist
+	exists := false
+	var count int64
+	var o error
+	if email == "" {
+		count, o = Redis_client.Exists(r.Context(), name+dip).Result()
+		if count != 0 {
+			exists = true
+		}
+	} else {
+		count, o = Redis_client.Exists(r.Context(), email).Result()
+		if count != 0 {
+			exists = true
+		}
+	}
+	if o != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Server error"))
+		return
+	}
+
+	if exists { // means such a cookie not exist
 		l("shit1")
 
 		var counter int64

@@ -79,7 +79,7 @@ func ForgetPassword(w http.ResponseWriter, r *http.Request) { // dosen't require
 			return
 		}
 
-		removed, err := Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
+		removed, err := Redis_client.LRem(r.Context(), "forget"+dip, 1, token).Result()
 
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -139,7 +139,7 @@ func ForgetPasswordValidation(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		removed, erro := Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
+		removed, erro := Redis_client.LRem(r.Context(), "forgetValidation"+dip, 1, token).Result()
 
 		if erro != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -229,7 +229,7 @@ func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-		removed, err := Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
+		removed, err := Redis_client.LRem(r.Context(), "forgetValidationJWT"+dip, 1, token).Result()
 
 		if err != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -511,7 +511,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		removed, err := Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
+		removed, err := Redis_client.LRem(r.Context(), "loginVS"+dip, 1, token).Result()
 
 		if err != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -735,7 +735,7 @@ func LoginValidationJWT(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		removed, err := Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
+		removed, err := Redis_client.LRem(r.Context(), "loginVJ"+dip, 1, token).Result()
 
 		if err != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -869,7 +869,7 @@ func LoginValidation(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		removed, erro := Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
+		removed, erro := Redis_client.LRem(r.Context(), "loginV"+dip, 1, token).Result()
 
 		if erro != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -975,7 +975,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		removed, err := Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
+		removed, err := Redis_client.LRem(r.Context(), "login"+dip, 1, token).Result()
 
 		if err != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -1014,7 +1014,7 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		removed, err := Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
+		removed, err := Redis_client.LRem(r.Context(), "registerVS"+dip, 1, token).Result()
 
 		if err != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -1225,7 +1225,7 @@ func RegisterValidationJWT(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		removed, err := Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
+		removed, err := Redis_client.LRem(r.Context(), "registerVJ"+dip, 1, token).Result()
 
 		if err != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -1345,7 +1345,7 @@ func RegisterValidation(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 		}
 
-		removed, erro := Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
+		removed, erro := Redis_client.LRem(r.Context(), "registerV"+dip, 1, token).Result()
 
 		if erro != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -1455,7 +1455,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		dip := r.Header.Get("realip")
 		log.Println("Ip of that guy", dip)
 
-		removed, err := Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
+		removed, err := Redis_client.LRem(r.Context(), "register"+dip, 1, token).Result()
 
 		if err != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
