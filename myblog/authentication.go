@@ -62,10 +62,16 @@ func ForgetPassword(w http.ResponseWriter, r *http.Request) { // dosen't require
 	payload := r.Header
 	switch r.Method {
 	case "GET":
-		BucketHandlement("forget", w, r)
+		BucketHandlement("forget", "forgetPassword", w, r)
 	case "POST":
-		token := payload.Get("token") // generated token from bucket
 		dip := payload.Get("realip")
+		cookie, ero := r.Cookie("forget")
+		if ero != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		token := cookie.Value
 
 		if token == "" {
 			w.WriteHeader(http.StatusBadRequest)
@@ -73,7 +79,7 @@ func ForgetPassword(w http.ResponseWriter, r *http.Request) { // dosen't require
 			return
 		}
 
-		removed, err := Redis_client.LRem(r.Context(), dip, 1, token).Result()
+		removed, err := Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
 
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -92,10 +98,16 @@ func ForgetPasswordValidation(w http.ResponseWriter, r *http.Request) {
 	dip := r.Header.Get("realip")
 	switch r.Method {
 	case "GET":
-		BucketHandlement("forgetValidation", w, r)
+		BucketHandlement("forgetValidation", "forgetPassword/validation", w, r)
 	case "POST":
 		email := payload.Get("email")
-		token := payload.Get("token")
+		cookie, ero := r.Cookie("forgetValidation")
+		if ero != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		token := cookie.Value
 		cookie, erroj := r.Cookie("forgetPasswordValidation")
 		decodedCookie, ear := base64.StdEncoding.DecodeString(cookie.Name)
 
@@ -127,7 +139,7 @@ func ForgetPasswordValidation(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		removed, erro := Redis_client.LRem(r.Context(), dip, 1, token).Result()
+		removed, erro := Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
 
 		if erro != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -193,10 +205,16 @@ func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
 	payload := r.Header
 	switch r.Method {
 	case "GET":
-		BucketHandlement("forgetValidationJWT", w, r)
+		BucketHandlement("forgetValidationJWT", "forgetPassword/validation/jwt", w, r)
 	case "POST":
 		dip := payload.Get("realip")
-		token := payload.Get("token")
+		cookie, ero := r.Cookie("forgetValidationJWT")
+		if ero != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		token := cookie.Value
 		cookie, erroj := r.Cookie("forgetPasswordValidationJWT")
 		decodedCookie, ear := base64.StdEncoding.DecodeString(cookie.Name)
 
@@ -211,7 +229,7 @@ func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-		removed, err := Redis_client.LRem(r.Context(), dip, 1, token).Result()
+		removed, err := Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
 
 		if err != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -328,7 +346,7 @@ func rateLimiter(dip string, name string, w http.ResponseWriter, r *http.Request
 		Redis_client.Expire(r.Context(), name+dip, 30*time.Second)
 	}
 
-	if counter >= 10 {
+	if counter > 10 {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("Bad request"))
 		return false
@@ -371,8 +389,8 @@ func ForgetPasswordChangeLink(w http.ResponseWriter, r *http.Request) {
 				HttpOnly: true,
 				Secure:   true,
 				SameSite: http.SameSiteStrictMode,
-				Path:     "/auth", // Only sent to auth endpoints
-				MaxAge:   300,     // 5 minutes matching your timestamp check
+				Path:     "/auth/forgetPassword",
+				MaxAge:   300,
 			})
 			w.WriteHeader(http.StatusAccepted)
 		}
@@ -481,11 +499,17 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 	dip := payload.Get("realip")
 	switch r.Method {
 	case "GET":
-		BucketHandlement("loginValidationSubmit", w, r)
+		BucketHandlement("loginVS", "login/validation/submit", w, r)
 	case "POST":
 		password := payload.Get("password")
 		verification := payload.Get("verification")
-		token := payload.Get("token")
+		cookie, ero := r.Cookie("loginVS")
+		if ero != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		token := cookie.Value
 
 		if password == "" || verification == "" || token == "" {
 			w.WriteHeader(http.StatusBadRequest)
@@ -493,7 +517,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		removed, err := Redis_client.LRem(r.Context(), dip, 1, token).Result()
+		removed, err := Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
 
 		if err != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -685,10 +709,16 @@ func LoginValidationJWT(w http.ResponseWriter, r *http.Request) {
 	dip := payload.Get("realip")
 	switch r.Method {
 	case "GET":
-		BucketHandlement("loginValidationJWT", w, r)
+		BucketHandlement("loginVJ", "login/validation/jwt", w, r)
 	case "POST":
 		password := payload.Get("password")
-		token := payload.Get("token")
+		cookie, ero := r.Cookie("loginVJ")
+		if ero != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		token := cookie.Value
 
 		if password == "" || token == "" {
 			w.WriteHeader(http.StatusBadRequest)
@@ -696,7 +726,7 @@ func LoginValidationJWT(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		removed, err := Redis_client.LRem(r.Context(), dip, 1, token).Result()
+		removed, err := Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
 
 		if err != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -815,12 +845,18 @@ func LoginValidation(w http.ResponseWriter, r *http.Request) {
 	payload := r.Header
 	switch r.Method {
 	case "GET":
-		BucketHandlement("loginValidation", w, r)
+		BucketHandlement("loginV", "login/validation", w, r)
 	case "POST":
 		email := payload.Get("email")
 		captchaD := payload.Get("captchaAnswer")
 		dip := payload.Get("realip")
-		token := payload.Get("token")
+		cookie, ero := r.Cookie("loginV")
+		if ero != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		token := cookie.Value
 
 		if email == "" || captchaD == "" || token == "" {
 			w.WriteHeader(http.StatusBadRequest)
@@ -828,7 +864,7 @@ func LoginValidation(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		removed, erro := Redis_client.LRem(r.Context(), dip, 1, token).Result()
+		removed, erro := Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
 
 		if erro != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -916,20 +952,25 @@ func LoginValidation(w http.ResponseWriter, r *http.Request) {
 }
 
 func Login(w http.ResponseWriter, r *http.Request) {
-	payload := r.Header
 	switch r.Method {
 	case "GET":
-		BucketHandlement("login", w, r)
+		BucketHandlement("login", "login", w, r)
 	case "POST":
 		dip := r.Header.Get("realip")
-		token := payload.Get("token") // generated token from bucket
+		cookie, ero := r.Cookie("login")
+		if ero != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		token := cookie.Value
 		if token == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
 		}
 
-		removed, err := Redis_client.LRem(r.Context(), dip, 1, token).Result()
+		removed, err := Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
 
 		if err != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -949,9 +990,15 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 	payload := r.Header
 	switch r.Method {
 	case "GET":
-		BucketHandlement("registerValidationSubmit", w, r)
+		BucketHandlement("registerVS", "register/validation/submit", w, r)
 	case "POST":
-		token := payload.Get("token") // generated token from bucket
+		cookie, ero := r.Cookie("registerVS")
+		if ero != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		token := cookie.Value
 		verification := payload.Get("verification")
 		dip := payload.Get("realip")
 		password := payload.Get("password")
@@ -962,7 +1009,7 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		removed, err := Redis_client.LRem(r.Context(), dip, 1, token).Result()
+		removed, err := Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
 
 		if err != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -1134,9 +1181,15 @@ func RegisterValidationJWT(w http.ResponseWriter, r *http.Request) {
 	payload := r.Header
 	switch r.Method {
 	case "GET":
-		BucketHandlement("registerValidationJWT", w, r)
+		BucketHandlement("registerVJ", "register/validation/jwt", w, r)
 	case "POST":
-		token := payload.Get("token")
+		cookie, ero := r.Cookie("registerVJ")
+		if ero != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		token := cookie.Value
 		dip := payload.Get("realip")
 		username := payload.Get("username")
 		password := payload.Get("password")
@@ -1146,7 +1199,7 @@ func RegisterValidationJWT(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		removed, err := Redis_client.LRem(r.Context(), dip, 1, token).Result()
+		removed, err := Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
 
 		if err != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -1252,18 +1305,24 @@ func RegisterValidation(w http.ResponseWriter, r *http.Request) {
 	payload := r.Header
 	switch r.Method {
 	case "GET":
-		BucketHandlement("registerValidation", w, r)
+		BucketHandlement("registerV", "register/validation", w, r)
 	case "POST":
 		captchaD := payload.Get("captchaAnswer")
 		email := payload.Get("email")
 		dip := payload.Get("realip")
-		token := payload.Get("token")
+		cookie, ero := r.Cookie("registerV")
+		if ero != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		token := cookie.Value
 		if captchaD == "" || email == "" || token == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 		}
 
-		removed, erro := Redis_client.LRem(r.Context(), dip, 1, token).Result()
+		removed, erro := Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
 
 		if erro != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -1351,12 +1410,17 @@ func RegisterValidation(w http.ResponseWriter, r *http.Request) {
 }
 
 func Register(w http.ResponseWriter, r *http.Request) {
-	payload := r.Header
 	switch r.Method {
 	case "GET":
-		BucketHandlement("register", w, r)
+		BucketHandlement("register", "register", w, r)
 	case "POST":
-		token := payload.Get("token") // generated token from bucket
+		cookie, ero := r.Cookie("register")
+		if ero != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		token := cookie.Value
 		log.Println("Token seems obtained")
 		if token == "" {
 			log.Println("What the fuck?")
@@ -1368,7 +1432,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		dip := r.Header.Get("realip")
 		log.Println("Ip of that guy", dip)
 
-		removed, err := Redis_client.LRem(r.Context(), dip, 1, token).Result()
+		removed, err := Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
 
 		if err != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -1431,7 +1495,7 @@ func CaptchaGeneration(dip string, name string, endpoint string, w http.Response
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
 		Path:     "/auth/" + endpoint, // Only sent to auth endpoints
-		MaxAge:   5,
+		MaxAge:   300,
 	})
 	w.Write([]byte(`{
 		"masterImage": "` + masterImage + `",
@@ -1495,7 +1559,7 @@ func CaptchaToken(captchaData map[string]string, name string, endpoint string, e
 			Secure:   true,
 			SameSite: http.SameSiteStrictMode,
 			Path:     "/auth/" + endpoint, // Only sent to auth endpoints
-			MaxAge:   5,
+			MaxAge:   300,
 		})
 		if endpoint2 != "" {
 			http.SetCookie(w, &http.Cookie{
@@ -1508,7 +1572,7 @@ func CaptchaToken(captchaData map[string]string, name string, endpoint string, e
 				Secure:   true,
 				SameSite: http.SameSiteStrictMode,
 				Path:     "/auth/" + endpoint2, // Only sent to auth endpoints
-				MaxAge:   5,
+				MaxAge:   300,
 			})
 		}
 		w.WriteHeader(http.StatusAccepted)

@@ -3,12 +3,11 @@ package myblog
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"log"
 	rnd "math/rand/v2"
 	"net/http"
 	"time"
-
-	"github.com/redis/go-redis/v9"
 )
 
 type BucketData struct {
@@ -28,11 +27,10 @@ func GenerateBucket(n int) []string {
 
 var l = log.Println
 
-func BucketHandlement(name string, w http.ResponseWriter, r *http.Request) {
+func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *http.Request) {
 	dip := r.Header.Get("realip")
-	token, err := Redis_client.LIndex(r.Context(), dip, -1).Result()
-	l("shit", token)
-	if err == redis.Nil {
+	_, err := r.Cookie(name)
+	if err != nil { // means such a cookie not exist
 		l("shit1")
 		counter, err := Redis_client.Incr(r.Context(), name+dip).Result()
 		if err != nil {
@@ -51,25 +49,23 @@ func BucketHandlement(name string, w http.ResponseWriter, r *http.Request) {
 		for k, v := range buckdat {
 			buckdatInterfaces[k] = v
 		}
-		redis_pipe.LPush(r.Context(), dip, buckdatInterfaces...)
-		redis_pipe.Expire(r.Context(), dip, 5*time.Minute)
+		sessionId := rnd.IntN(90000) + 10000
+		redis_pipe.LPush(r.Context(), dip+fmt.Sprintf("%d", sessionId), buckdatInterfaces...)
+		redis_pipe.Expire(r.Context(), dip+fmt.Sprintf("%d", sessionId), 30*time.Second)
 		redis_pipe.Exec(r.Context())
 		token, err := Redis_client.LIndex(r.Context(), dip, -1).Result()
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-			return
-		}
+		http.SetCookie(w, &http.Cookie{
+			Name:     name,
+			Value:    token,
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteStrictMode,
+			Path:     "/auth/" + endpoint,
+			MaxAge:   30,
+		})
 		w.WriteHeader(http.StatusAccepted)
-		w.Write([]byte(token))
 		return
 	} else {
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-			return
-		}
-
 		counter, err := Redis_client.Incr(r.Context(), name+dip).Result()
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -84,20 +80,6 @@ func BucketHandlement(name string, w http.ResponseWriter, r *http.Request) {
 		}
 
 		result, err := Redis_client.LIndex(r.Context(), dip, -1).Result()
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-			return
-		}
-		if result == "in-queue" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		w.WriteHeader(http.StatusAccepted)
-		w.Write([]byte(token))
-
 		length, err := Redis_client.LLen(r.Context(), dip).Result()
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -106,10 +88,24 @@ func BucketHandlement(name string, w http.ResponseWriter, r *http.Request) {
 		}
 		if length == 0 {
 			pipeline := Redis_client.Pipeline()
-			pipeline.LPush(r.Context(), dip, "in-queue")
-			pipeline.Expire(r.Context(), dip, 5*time.Minute)
+			pipeline.LPush(r.Context(), dip+result, "in-queue")
+			pipeline.Expire(r.Context(), dip+result, 5*time.Minute)
 			pipeline.Exec(r.Context())
 		}
-
+		if result == "in-queue" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		http.SetCookie(w, &http.Cookie{
+			Name:     name,
+			Value:    result,
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteStrictMode,
+			Path:     "/auth/" + endpoint,
+			MaxAge:   30,
+		})
+		w.WriteHeader(http.StatusAccepted)
 	}
 }
