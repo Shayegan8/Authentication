@@ -30,12 +30,12 @@ func Post(w http.ResponseWriter, r *http.Request) {
 		/*
 			we check for their refresh token
 			then we make a signed access token
-			then they can use that access token
+			then they can use that access token to make a post
 		*/
 	}
 }
 
-func GetPosts(w http.ResponseWriter, r *http.Request) { // GetPosts dosent require
+func GetPosts(w http.ResponseWriter, r *http.Request) { // GetPosts dosent require refresh tokens
 	switch r.Method {
 	case "GET":
 		BucketHandlement("getPosts", "getPosts", w, r)

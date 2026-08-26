@@ -288,12 +288,7 @@ func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
 		}
 
 		rows, erra := Postgres_client.Query(r.Context(), "SELECT * FROM users WHERE email=$1", marshaled["email"])
-		if erra != nil {
-			if erra == redis.Nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte("Bad request")) // Invalid user credintals
-				return
-			}
+		if erra != nil && erra != redis.Nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error")) // Invalid user credintals
 			return
@@ -328,8 +323,7 @@ func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusAccepted)
 		} else {
 			rows.Close()
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request")) // Invalid user credintals
+			w.WriteHeader(http.StatusAccepted)
 		}
 	}
 }
@@ -649,12 +643,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		rows, errio := Postgres_client.Query(r.Context(), "SELECT refreshToken, userid, password FROM users WHERE email=$1", marshaled["email"])
-		if errio != nil {
-			if errio == redis.Nil {
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte("Bad request"))
-				return
-			}
+		if errio != nil && errio != redis.Nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
 			return
@@ -705,8 +694,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		} else {
 			rows.Close()
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Bad request"))
+			w.WriteHeader(http.StatusAccepted)
 			return
 		}
 	}
@@ -819,12 +807,7 @@ func LoginValidationJWT(w http.ResponseWriter, r *http.Request) {
 
 		rows, erra := Postgres_client.Query(r.Context(), "SELECT password FROM users WHERE email=$1", marshaled["email"])
 
-		if erra != nil {
-			if erra == redis.Nil {
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte("Bad request")) // Invalid user credintals
-				return
-			}
+		if erra != nil && erra != redis.Nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error")) // Invalid user credintals
 			return
@@ -844,8 +827,9 @@ func LoginValidationJWT(w http.ResponseWriter, r *http.Request) {
 				w.Write([]byte("Bad request"))
 				return
 			}
+		} else {
+			Verify(marshaled["email"], "loginValidationSubmit", "login/validation/submit", w, r)
 		}
-		Verify(marshaled["email"], "loginValidationSubmit", "login/validation/submit", w, r)
 	}
 }
 
@@ -1305,15 +1289,12 @@ func RegisterValidationJWT(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if rows.Next() { // this means if the user with this details actually exist we reject them
+		if rows.Next() { // this means if the user with this details actually exist we should do nothing
 			rows.Close()
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request")) // Invalid user credintals
-			return
+			w.WriteHeader(http.StatusAccepted)
+		} else {
+			Verify(marshaled["email"], "registerValidationSubmit", "register/validation/submit", w, r)
 		}
-
-		Verify(marshaled["email"], "registerValidationSubmit", "register/validation/submit", w, r)
-
 	}
 }
 
