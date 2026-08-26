@@ -1151,6 +1151,7 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			// this isnt possible but anyway
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
+			return
 		}
 		if query.Next() {
 			var userid string

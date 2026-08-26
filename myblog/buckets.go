@@ -129,15 +129,13 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 
 		var counter int64
 
-		pipe := Redis_client.Pipeline()
 		if email == "" {
-			counter, _ = pipe.Incr(r.Context(), "counter"+name+dip).Result()
-			pipe.Expire(r.Context(), "counter"+name+dip, 30*time.Second)
+			counter, _ = Redis_client.Incr(r.Context(), "counter"+name+dip).Result()
+			Redis_client.Expire(r.Context(), "counter"+name+dip, 30*time.Second)
 		} else {
-			counter, _ = pipe.Incr(r.Context(), "counter"+email).Result()
-			pipe.Expire(r.Context(), "counter"+email, 30*time.Second)
+			counter, _ = Redis_client.Incr(r.Context(), "counter"+email).Result()
+			Redis_client.Expire(r.Context(), "counter"+email, 30*time.Second)
 		}
-		pipe.Exec(r.Context())
 		l("Whats the counter:", counter)
 		if counter == 1 {
 			if email == "" {
@@ -152,16 +150,14 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 		for k, v := range buckdat {
 			buckdatInterfaces[k] = v
 		}
-		redis_pipe := Redis_client.Pipeline()
 		if email == "" {
-			redis_pipe.LPush(r.Context(), name+dip, buckdatInterfaces...)
-			redis_pipe.Expire(r.Context(), name+dip, 30*time.Second)
+			Redis_client.LPush(r.Context(), name+dip, buckdatInterfaces...)
+			Redis_client.Expire(r.Context(), name+dip, 30*time.Second)
 		} else {
-			redis_pipe.LPush(r.Context(), email, buckdatInterfaces...)
-			redis_pipe.Expire(r.Context(), email, 30*time.Second)
+			Redis_client.LPush(r.Context(), email, buckdatInterfaces...)
+			Redis_client.Expire(r.Context(), email, 30*time.Second)
 		}
 
-		redis_pipe.Exec(r.Context())
 		token, _ := Redis_client.LIndex(r.Context(), name+dip, -1).Result()
 		http.SetCookie(w, &http.Cookie{
 			Name:     name,
@@ -177,15 +173,13 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 	} else {
 		var counter int64
 
-		pipe := Redis_client.Pipeline()
 		if email == "" {
-			counter, _ = pipe.Incr(r.Context(), "counter"+name+dip).Result()
-			pipe.Expire(r.Context(), "counter"+name+dip, 30*time.Second)
+			counter, _ = Redis_client.Incr(r.Context(), "counter"+name+dip).Result()
+			Redis_client.Expire(r.Context(), "counter"+name+dip, 30*time.Second)
 		} else {
-			counter, _ = pipe.Incr(r.Context(), "counter"+email).Result()
-			pipe.Expire(r.Context(), "counter"+email, 30*time.Second)
+			counter, _ = Redis_client.Incr(r.Context(), "counter"+email).Result()
+			Redis_client.Expire(r.Context(), "counter"+email, 30*time.Second)
 		}
-		pipe.Exec(r.Context())
 
 		if counter > 10 {
 			w.WriteHeader(http.StatusBadRequest)
@@ -208,15 +202,13 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 			return
 		}
 		if length == 0 {
-			pipeline := Redis_client.Pipeline()
 			if email == "" {
-				pipeline.LPush(r.Context(), name+dip, "in-queue")
-				pipeline.Expire(r.Context(), name+dip, 30*time.Second)
+				Redis_client.LPush(r.Context(), name+dip, "in-queue")
+				Redis_client.Expire(r.Context(), name+dip, 30*time.Second)
 			} else {
-				pipeline.LPush(r.Context(), email, "in-queue")
-				pipeline.Expire(r.Context(), email, 30*time.Second)
+				Redis_client.LPush(r.Context(), email, "in-queue")
+				Redis_client.Expire(r.Context(), email, 30*time.Second)
 			}
-			pipeline.Exec(r.Context())
 		}
 		if result == "in-queue" {
 			w.WriteHeader(http.StatusBadRequest)
