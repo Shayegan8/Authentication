@@ -1518,11 +1518,11 @@ func CaptchaGeneration(dip string, name string, endpoint string, w http.Response
 		Path:     "/auth/" + endpoint, // Only sent to auth endpoints
 		MaxAge:   120,
 	})
+	w.WriteHeader(http.StatusAccepted)
 	w.Write([]byte(`{
 		"masterImage": "` + masterImage + `",
 		"titleImage": "` + tileImage + `"
 	}`))
-	w.WriteHeader(http.StatusAccepted)
 }
 
 func CaptchaToken(captchaData map[string]string, name string, endpoint string, email string, token string, w http.ResponseWriter, dip string, r *http.Request) {
