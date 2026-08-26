@@ -1,8 +1,13 @@
 package myblog
 
 import (
+	"crypto"
 	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
 	rnd "math/rand/v2"
@@ -34,11 +39,84 @@ If just userData exist we do rate limit with userData, using userAgent make it m
 func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *http.Request) {
 	dip := r.Header.Get("realip")
 	userData, erro := r.Cookie("userData")
+	email := ""
+	if erro == nil {
+		decrypted, ere := base64.StdEncoding.DecodeString(userData.Value)
+		if ere != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		}
+		var decryptedInMap map[string]string
+		erse := json.Unmarshal(decrypted, &decryptedInMap)
+		if erse != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		}
 
+		sig := decryptedInMap["signature"]
+		answer := decryptedInMap["answer"]
+		summedJwt := sha256.Sum256([]byte(answer))
+		decodedSig, erri := base64.StdEncoding.DecodeString(sig)
+		if erri != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		verErr := rsa.VerifyPKCS1v15(PublicKey, crypto.SHA256, summedJwt[:], decodedSig)
+
+		if verErr != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		var marshaled map[string]string
+		erro := json.Unmarshal([]byte(answer), &marshaled)
+		if erro != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		}
+
+		// then we check if the refresh token was exist
+		rows, e := Postgres_client.Query(r.Context(), "SELECT refreshToken FROM users WHERE email=$1", marshaled["email"])
+		if e != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		}
+		var refreshTokenBuffer []byte
+		if rows.Next() {
+			rows.Scan(&refreshTokenBuffer)
+			refreshToken := hex.EncodeToString(refreshTokenBuffer)
+			if refreshToken != marshaled["refreshToken"] {
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte("Bad request"))
+				return
+			}
+			email = marshaled["email"]
+		} else {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+	}
 	_, err := r.Cookie(name)
 	if err != nil { // means such a cookie not exist
 		l("shit1")
-		counter, err := Redis_client.Incr(r.Context(), name+dip).Result()
+
+		var counter int64
+		var err error
+
+		if email == "" {
+			counter, err = Redis_client.Incr(r.Context(), name+dip).Result()
+		} else {
+			counter, err = Redis_client.Incr(r.Context(), email).Result()
+		}
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
@@ -46,18 +124,28 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 		}
 		l("Whats the counter:", counter)
 		if counter == 1 {
-			Redis_client.Expire(r.Context(), name+dip, 30*time.Second)
+			if email == "" {
+				Redis_client.Expire(r.Context(), name+dip, 30*time.Second)
+			} else {
+				Redis_client.Expire(r.Context(), email, 30*time.Second)
+			}
 		}
 
-		redis_pipe := Redis_client.Pipeline()
 		buckdat := GenerateBucket(rnd.IntN(50) + 20)
 		buckdatInterfaces := make([]any, len(buckdat))
 		for k, v := range buckdat {
 			buckdatInterfaces[k] = v
 		}
 		sessionId := rnd.IntN(90000) + 10000
-		redis_pipe.LPush(r.Context(), dip+fmt.Sprintf("%d", sessionId), buckdatInterfaces...)
-		redis_pipe.Expire(r.Context(), dip+fmt.Sprintf("%d", sessionId), 30*time.Second)
+		redis_pipe := Redis_client.Pipeline()
+		if email == "" {
+			redis_pipe.LPush(r.Context(), dip+fmt.Sprintf("%d", sessionId), buckdatInterfaces...)
+			redis_pipe.Expire(r.Context(), dip+fmt.Sprintf("%d", sessionId), 30*time.Second)
+		} else {
+			redis_pipe.LPush(r.Context(), email, buckdatInterfaces...)
+			redis_pipe.Expire(r.Context(), email, 30*time.Second)
+		}
+
 		redis_pipe.Exec(r.Context())
 		token, err := Redis_client.LIndex(r.Context(), dip, -1).Result()
 		http.SetCookie(w, &http.Cookie{
@@ -72,7 +160,13 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 		w.WriteHeader(http.StatusAccepted)
 		return
 	} else {
-		counter, err := Redis_client.Incr(r.Context(), name+dip).Result()
+		var counter int64
+		var err error
+		if email == "" {
+			counter, err = Redis_client.Incr(r.Context(), name+dip).Result()
+		} else {
+			counter, err = Redis_client.Incr(r.Context(), email).Result()
+		}
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
@@ -84,9 +178,15 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 			w.Write([]byte("Bad request"))
 			return
 		}
-
-		result, err := Redis_client.LIndex(r.Context(), dip, -1).Result()
-		length, err := Redis_client.LLen(r.Context(), dip).Result()
+		var result string
+		var length int64
+		if email == "" {
+			result, err = Redis_client.LIndex(r.Context(), name+dip, -1).Result()
+			length, err = Redis_client.LLen(r.Context(), name+dip).Result()
+		} else {
+			result, err = Redis_client.LIndex(r.Context(), email, -1).Result()
+			length, err = Redis_client.LLen(r.Context(), email).Result()
+		}
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
@@ -94,8 +194,13 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 		}
 		if length == 0 {
 			pipeline := Redis_client.Pipeline()
-			pipeline.LPush(r.Context(), dip+result, "in-queue")
-			pipeline.Expire(r.Context(), dip+result, 5*time.Minute)
+			if email == "" {
+				pipeline.LPush(r.Context(), name+dip, "in-queue")
+				pipeline.Expire(r.Context(), name+dip, 30*time.Second)
+			} else {
+				pipeline.LPush(r.Context(), email, "in-queue")
+				pipeline.Expire(r.Context(), email, 30*time.Second)
+			}
 			pipeline.Exec(r.Context())
 		}
 		if result == "in-queue" {

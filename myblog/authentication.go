@@ -677,11 +677,24 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
+			value := `"{
+					"userid": "` + userid + `",
+					"email": "` + marshaled["email"] + `",
+					"refreshToken": "` + refreshTokenHex + `"
+			}"`
+			hashedValue := sha256.Sum256([]byte(value))
+
+			signature, eara := rsa.SignPKCS1v15(rand.Reader, PrivateKey, crypto.SHA256, hashedValue[:])
+			if eara != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("Server error"))
+				return
+			}
 			http.SetCookie(w, &http.Cookie{
 				Name: "userData",
 				Value: base64.StdEncoding.EncodeToString([]byte(`{
-					"userid": "` + userid + `,
-					"refreshToken": "` + refreshTokenHex + `"
+					"signature": "` + base64.StdEncoding.EncodeToString(signature) + `",
+					"answer": ` + value + `
 				}`)),
 				HttpOnly: true,
 				Secure:   true,
@@ -1159,11 +1172,24 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			query.Scan(&userid)
 			query.Close()
 			// give token and write success
+			value := `"{
+					"userid": "` + userid + `",
+					"email": "` + marshaled["email"] + `",
+					"refreshToken": "` + refreshTokenHex + `"
+			}"`
+			hashedValue := sha256.Sum256([]byte(value))
+
+			signature, eara := rsa.SignPKCS1v15(rand.Reader, PrivateKey, crypto.SHA256, hashedValue[:])
+			if eara != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("Server error"))
+				return
+			}
 			http.SetCookie(w, &http.Cookie{
 				Name: "userData",
 				Value: base64.StdEncoding.EncodeToString([]byte(`{
-					"userid": "` + userid + `,
-					"refreshToken": "` + refreshTokenHex + `"
+					"signature": "` + base64.StdEncoding.EncodeToString(signature) + `",
+					"answer": ` + value + `
 				}`)),
 				HttpOnly: true,
 				Secure:   true,
