@@ -109,7 +109,7 @@ func ForgetPasswordValidation(w http.ResponseWriter, r *http.Request) {
 		}
 		token := cookie.Value
 		cookie, erroj := r.Cookie("forgetPasswordValidation")
-		decodedCookie, ear := base64.StdEncoding.DecodeString(cookie.Name)
+		decodedCookie, ear := base64.StdEncoding.DecodeString(cookie.Value)
 
 		if erroj != nil || ear != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -216,7 +216,7 @@ func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
 		}
 		token := cookie.Value
 		cookie, erroj := r.Cookie("forgetPasswordValidationJWT")
-		decodedCookie, ear := base64.StdEncoding.DecodeString(cookie.Name)
+		decodedCookie, ear := base64.StdEncoding.DecodeString(cookie.Value)
 
 		if erroj != nil || ear != nil {
 			w.WriteHeader(http.StatusBadRequest)
