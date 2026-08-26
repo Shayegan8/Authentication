@@ -131,9 +131,9 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 		var err error
 
 		if email == "" {
-			counter, err = Redis_client.Incr(r.Context(), name+dip).Result()
+			counter, err = Redis_client.Incr(r.Context(), "counter"+name+dip).Result()
 		} else {
-			counter, err = Redis_client.Incr(r.Context(), email).Result()
+			counter, err = Redis_client.Incr(r.Context(), "counter"+email).Result()
 		}
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -180,9 +180,9 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 		var counter int64
 		var err error
 		if email == "" {
-			counter, err = Redis_client.Incr(r.Context(), name+dip).Result()
+			counter, err = Redis_client.Incr(r.Context(), "counter"+name+dip).Result()
 		} else {
-			counter, err = Redis_client.Incr(r.Context(), email).Result()
+			counter, err = Redis_client.Incr(r.Context(), "counter"+email).Result()
 		}
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)

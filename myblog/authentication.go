@@ -835,13 +835,11 @@ func LoginValidationJWT(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			err := bcrypt.CompareHashAndPassword(hashedPass, []byte(password))
-			if err != nil {
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte("Bad request"))
-				return
+			if err == nil {
+				Verify(marshaled["email"], "loginValidationSubmit", "login/validation/submit", w, r)
+			} else {
+				w.WriteHeader(http.StatusAccepted)
 			}
-		} else {
-			Verify(marshaled["email"], "loginValidationSubmit", "login/validation/submit", w, r)
 		}
 	}
 }
