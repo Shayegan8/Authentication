@@ -288,7 +288,7 @@ func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
 		}
 
 		rows, erra := Postgres_client.Query(r.Context(), "SELECT * FROM users WHERE email=$1", marshaled["email"])
-		if erra != nil && erra != redis.Nil {
+		if erra != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error")) // Invalid user credintals
 			return
@@ -643,7 +643,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		rows, errio := Postgres_client.Query(r.Context(), "SELECT refreshToken, userid, password FROM users WHERE email=$1", marshaled["email"])
-		if errio != nil && errio != redis.Nil {
+		if errio != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
 			return
@@ -820,7 +820,7 @@ func LoginValidationJWT(w http.ResponseWriter, r *http.Request) {
 
 		rows, erra := Postgres_client.Query(r.Context(), "SELECT password FROM users WHERE email=$1", marshaled["email"])
 
-		if erra != nil && erra != redis.Nil {
+		if erra != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error")) // Invalid user credintals
 			return
