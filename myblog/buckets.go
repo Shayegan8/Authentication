@@ -8,7 +8,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"log"
 	rnd "math/rand/v2"
 	"net/http"
@@ -136,18 +135,17 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 		for k, v := range buckdat {
 			buckdatInterfaces[k] = v
 		}
-		sessionId := rnd.IntN(90000) + 10000
 		redis_pipe := Redis_client.Pipeline()
 		if email == "" {
-			redis_pipe.LPush(r.Context(), dip+fmt.Sprintf("%d", sessionId), buckdatInterfaces...)
-			redis_pipe.Expire(r.Context(), dip+fmt.Sprintf("%d", sessionId), 30*time.Second)
+			redis_pipe.LPush(r.Context(), dip+name, buckdatInterfaces...)
+			redis_pipe.Expire(r.Context(), dip+name, 30*time.Second)
 		} else {
 			redis_pipe.LPush(r.Context(), email, buckdatInterfaces...)
 			redis_pipe.Expire(r.Context(), email, 30*time.Second)
 		}
 
 		redis_pipe.Exec(r.Context())
-		token, err := Redis_client.LIndex(r.Context(), dip, -1).Result()
+		token, err := Redis_client.LIndex(r.Context(), name+dip, -1).Result()
 		http.SetCookie(w, &http.Cookie{
 			Name:     name,
 			Value:    token,
