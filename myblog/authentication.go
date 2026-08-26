@@ -183,7 +183,7 @@ func ForgetPasswordValidation(w http.ResponseWriter, r *http.Request) {
 
 		converted, _ := strconv.Atoi(marshaled["time"])
 
-		if (time.Now().Unix() - int64(converted)) > 300 {
+		if (time.Now().Unix() - int64(converted)) > 120 {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -197,7 +197,7 @@ func ForgetPasswordValidation(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-		CaptchaToken(captchaData, "forgetPasswordValidationJWT", "forgetPassword/validation/jwt", "", email, marshaled["token"], w, dip, r)
+		CaptchaToken(captchaData, "forgetPasswordValidationJWT", "forgetPassword/validation/jwt", email, marshaled["token"], w, dip, r)
 	}
 }
 
@@ -281,7 +281,7 @@ func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
 
 		converted, _ := strconv.Atoi(marshaled["time"])
 
-		if (time.Now().Unix() - int64(converted)) > 300 {
+		if (time.Now().Unix() - int64(converted)) > 120 {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -390,7 +390,7 @@ func ForgetPasswordChangeLink(w http.ResponseWriter, r *http.Request) {
 				Secure:   true,
 				SameSite: http.SameSiteStrictMode,
 				Path:     "/auth/forgetPassword",
-				MaxAge:   300,
+				MaxAge:   120,
 			})
 			w.WriteHeader(http.StatusAccepted)
 		}
@@ -438,7 +438,7 @@ func ForgetPasswordChangeLink(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if len(password) < 8 || !strings.ContainsAny(password, "ABCDEFGHIKJLMNOPQRSTUVWXYZ") || !strings.ContainsAny(password, "abcdefghikjlmnopqrstuvwxyz") || !strings.ContainsAny(password, "0123456789") || !strings.ContainsAny(password, "!@#$%^&*()-_+") {
+		if len(password) < 8 || !strings.ContainsAny(password, "ABCDEFGHIKJLMNOPQRSTUVWXYZ") || !strings.ContainsAny(password, "abcdefghikjlmnopqrstuvwxyz") || !strings.ContainsAny(password, "0123456789") || !strings.ContainsAny(password, "!#$%^&*()-_+") {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -468,7 +468,7 @@ func ForgetPasswordChangeLink(w http.ResponseWriter, r *http.Request) {
 		}
 		converted, _ := strconv.Atoi(decodedAnswer["time"])
 
-		if (time.Now().Unix() - int64(converted)) > 300 {
+		if (time.Now().Unix() - int64(converted)) > 120 {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -535,13 +535,13 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if len(password) < 8 || !strings.ContainsAny(password, "ABCDEFGHIKJLMNOPQRSTUVWXYZ") || !strings.ContainsAny(password, "abcdefghikjlmnopqrstuvwxyz") || !strings.ContainsAny(password, "0123456789") || !strings.ContainsAny(password, "!@#$%^&*()-_+") {
+		if len(password) < 8 || !strings.ContainsAny(password, "ABCDEFGHIKJLMNOPQRSTUVWXYZ") || !strings.ContainsAny(password, "abcdefghikjlmnopqrstuvwxyz") || !strings.ContainsAny(password, "0123456789") || !strings.ContainsAny(password, "!#$%^&*()-_+") {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
 		}
 
-		answerCookie, erria := r.Cookie("loginValidationJWT")
+		answerCookie, erria := r.Cookie("loginValidationSubmit")
 		if erria != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
@@ -594,15 +594,21 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 
 		converted, _ := strconv.Atoi(marshaled["time"])
 
-		if (time.Now().Unix() - int64(converted)) > 300 {
+		if (time.Now().Unix() - int64(converted)) > 120 {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
 		}
 
+		count, era := Redis_client.Incr(r.Context(), "counter"+marshaled["email"]).Result()
+		if era != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		}
 		if vercode, erro := strconv.Atoi(verification); erro == nil {
 			// in this case user received the code and its on the header now
-			vc, err := Redis_client.Get(r.Context(), "captcha"+dip).Result()
+			vc, err := Redis_client.Get(r.Context(), marshaled["email"]).Result()
 			verificationCode, err1 := strconv.Atoi(vc)
 			if err1 != nil {
 				w.WriteHeader(http.StatusInternalServerError)
@@ -624,14 +630,16 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 				w.Write([]byte("Bad request"))
 				return
 			} else {
-				vcc, errr := Redis_client.Del(r.Context(), "captcha"+dip).Result()
-				if errr != nil {
-					w.WriteHeader(http.StatusInternalServerError)
-					w.Write([]byte("Server error")) // i dont think this happens, anyway
-					return
-				} else if vcc == 0 {
-					w.WriteHeader(http.StatusBadRequest)
-					w.Write([]byte("Bad request"))
+				if count == 10 {
+					_, errr := Redis_client.Del(r.Context(), marshaled["email"]).Result()
+					_, era := Redis_client.Del(r.Context(), "counter"+marshaled["email"]).Result()
+					if errr != nil || era != nil {
+						w.WriteHeader(http.StatusInternalServerError)
+						w.Write([]byte("Server error")) // i dont think this happens, anyway
+						return
+					}
+					w.WriteHeader(http.StatusBadGateway)
+					w.Write([]byte("Blocked"))
 					return
 				}
 			}
@@ -689,7 +697,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 				HttpOnly: true,
 				Secure:   true,
 				SameSite: http.SameSiteStrictMode,
-				Path:     "/auth", // Only sent to auth endpoints
+				Path:     "/",
 				MaxAge:   0,
 			})
 
@@ -744,7 +752,7 @@ func LoginValidationJWT(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if len(password) < 8 || !strings.ContainsAny(password, "ABCDEFGHIKJLMNOPQRSTUVWXYZ") || !strings.ContainsAny(password, "abcdefghikjlmnopqrstuvwxyz") || !strings.ContainsAny(password, "0123456789") || !strings.ContainsAny(password, "!@#$%^&*()-_+") {
+		if len(password) < 8 || !strings.ContainsAny(password, "ABCDEFGHIKJLMNOPQRSTUVWXYZ") || !strings.ContainsAny(password, "abcdefghikjlmnopqrstuvwxyz") || !strings.ContainsAny(password, "0123456789") || !strings.ContainsAny(password, "!#$%^&*()-_+") {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -803,7 +811,7 @@ func LoginValidationJWT(w http.ResponseWriter, r *http.Request) {
 
 		converted, _ := strconv.Atoi(marshaled["time"])
 
-		if (time.Now().Unix() - int64(converted)) > 300 {
+		if (time.Now().Unix() - int64(converted)) > 120 {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -837,7 +845,7 @@ func LoginValidationJWT(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		Verify(marshaled["email"], dip, w, r)
+		Verify(marshaled["email"], "loginValidationSubmit", "login/validation/submit", w, r)
 	}
 }
 
@@ -934,7 +942,7 @@ func LoginValidation(w http.ResponseWriter, r *http.Request) {
 		}
 		converted, _ := strconv.Atoi(marshaled["time"])
 
-		if (time.Now().Unix() - int64(converted)) > 300 {
+		if (time.Now().Unix() - int64(converted)) > 120 {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -947,7 +955,7 @@ func LoginValidation(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-		CaptchaToken(captchaData, "loginValidationJWT", "login/validation/jwt", "login/validation/submit", email, marshaled["token"], w, dip, r)
+		CaptchaToken(captchaData, "loginValidationJWT", "login/validation/jwt", email, marshaled["token"], w, dip, r)
 	}
 }
 
@@ -1033,7 +1041,7 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		answerCookie, erria := r.Cookie("registerValidationJWT")
+		answerCookie, erria := r.Cookie("registerValidationSubmit")
 		if erria != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
@@ -1086,15 +1094,21 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 
 		converted, _ := strconv.Atoi(marshaled["time"])
 
-		if (time.Now().Unix() - int64(converted)) > 300 {
+		if (time.Now().Unix() - int64(converted)) > 120 {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
 		}
 
+		count, era := Redis_client.Incr(r.Context(), "counter"+marshaled["email"]).Result()
+		if era != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		}
 		if vercode, erro := strconv.Atoi(verification); erro == nil {
 			// in this case user received the code and its on the header now
-			vc, err := Redis_client.Get(r.Context(), "captcha"+dip).Result()
+			vc, err := Redis_client.Get(r.Context(), marshaled["email"]).Result()
 			verificationCode, err1 := strconv.Atoi(vc)
 			if err1 != nil {
 				w.WriteHeader(http.StatusInternalServerError)
@@ -1116,14 +1130,16 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 				w.Write([]byte("Bad request"))
 				return
 			} else {
-				vcc, errr := Redis_client.Del(r.Context(), "captcha"+dip).Result()
-				if errr != nil {
-					w.WriteHeader(http.StatusInternalServerError)
-					w.Write([]byte("Server error")) // i dont think this happens, anyway
-					return
-				} else if vcc == 0 {
-					w.WriteHeader(http.StatusBadRequest)
-					w.Write([]byte("Bad request"))
+				if count == 10 {
+					_, errr := Redis_client.Del(r.Context(), marshaled["email"]).Result()
+					_, era := Redis_client.Del(r.Context(), "counter"+marshaled["email"]).Result()
+					if errr != nil || era != nil {
+						w.WriteHeader(http.StatusInternalServerError)
+						w.Write([]byte("Server error")) // i dont think this happens, anyway
+						return
+					}
+					w.WriteHeader(http.StatusBadGateway)
+					w.Write([]byte("Blocked"))
 					return
 				}
 			}
@@ -1168,7 +1184,7 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 				HttpOnly: true,
 				Secure:   true,
 				SameSite: http.SameSiteStrictMode,
-				Path:     "/auth/register/validation/submit", // Only sent to auth endpoints
+				Path:     "/",
 				MaxAge:   0,
 			})
 
@@ -1217,7 +1233,7 @@ func RegisterValidationJWT(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if len(password) < 8 || !strings.ContainsAny(password, "ABCDEFGHIKJLMNOPQRSTUVWXYZ") || !strings.ContainsAny(password, "abcdefghikjlmnopqrstuvwxyz") || !strings.ContainsAny(password, "0123456789") || !strings.ContainsAny(password, "!@#$%^&*()-_+") {
+		if len(password) < 8 || !strings.ContainsAny(password, "ABCDEFGHIKJLMNOPQRSTUVWXYZ") || !strings.ContainsAny(password, "abcdefghikjlmnopqrstuvwxyz") || !strings.ContainsAny(password, "0123456789") || !strings.ContainsAny(password, "!#$%^&*()-_+") {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -1276,7 +1292,7 @@ func RegisterValidationJWT(w http.ResponseWriter, r *http.Request) {
 
 		converted, _ := strconv.Atoi(marshaled["time"])
 
-		if (time.Now().Unix() - int64(converted)) > 300 {
+		if (time.Now().Unix() - int64(converted)) > 120 {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -1296,7 +1312,7 @@ func RegisterValidationJWT(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		Verify(marshaled["email"], dip, w, r)
+		Verify(marshaled["email"], "registerValidationSubmit", "register/validation/submit", w, r)
 
 	}
 }
@@ -1392,7 +1408,7 @@ func RegisterValidation(w http.ResponseWriter, r *http.Request) {
 		}
 		converted, _ := strconv.Atoi(marshaled["time"])
 
-		if (time.Now().Unix() - int64(converted)) > 300 {
+		if (time.Now().Unix() - int64(converted)) > 120 {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -1405,7 +1421,7 @@ func RegisterValidation(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-		CaptchaToken(captchaData, "registerValidationJWT", "register/validation/jwt", "register/validation/submit", email, marshaled["token"], w, dip, r)
+		CaptchaToken(captchaData, "registerValidationJWT", "register/validation/jwt", email, marshaled["token"], w, dip, r)
 	}
 }
 
@@ -1495,7 +1511,7 @@ func CaptchaGeneration(dip string, name string, endpoint string, w http.Response
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
 		Path:     "/auth/" + endpoint, // Only sent to auth endpoints
-		MaxAge:   300,
+		MaxAge:   120,
 	})
 	w.Write([]byte(`{
 		"masterImage": "` + masterImage + `",
@@ -1504,7 +1520,7 @@ func CaptchaGeneration(dip string, name string, endpoint string, w http.Response
 	w.WriteHeader(http.StatusAccepted)
 }
 
-func CaptchaToken(captchaData map[string]string, name string, endpoint string, endpoint2 string, email string, token string, w http.ResponseWriter, dip string, r *http.Request) {
+func CaptchaToken(captchaData map[string]string, name string, endpoint string, email string, token string, w http.ResponseWriter, dip string, r *http.Request) {
 	x, err := strconv.Atoi(captchaData["x"])
 	if err != nil { // this blocks are for testing and might be removed or above code might be changed
 		w.WriteHeader(http.StatusBadRequest)
@@ -1559,22 +1575,8 @@ func CaptchaToken(captchaData map[string]string, name string, endpoint string, e
 			Secure:   true,
 			SameSite: http.SameSiteStrictMode,
 			Path:     "/auth/" + endpoint, // Only sent to auth endpoints
-			MaxAge:   300,
+			MaxAge:   120,
 		})
-		if endpoint2 != "" {
-			http.SetCookie(w, &http.Cookie{
-				Name: name,
-				Value: base64.StdEncoding.EncodeToString([]byte(`{
-				"answer": ` + jsonAnswer + `,
-				"signature": "` + base64.StdEncoding.EncodeToString(signature) + `"
-			}`)),
-				HttpOnly: true,
-				Secure:   true,
-				SameSite: http.SameSiteStrictMode,
-				Path:     "/auth/" + endpoint2, // Only sent to auth endpoints
-				MaxAge:   300,
-			})
-		}
 		w.WriteHeader(http.StatusAccepted)
 		return
 	} else {
@@ -1584,7 +1586,7 @@ func CaptchaToken(captchaData map[string]string, name string, endpoint string, e
 	}
 }
 
-func Verify(email string, dip string, w http.ResponseWriter, r *http.Request) {
+func Verify(email string, name string, endpoint string, w http.ResponseWriter, r *http.Request) {
 	// if the user was already in our storage means its login other
 	vcode := rnd.IntN(90000) + 10000
 	go func() {
@@ -1597,6 +1599,29 @@ func Verify(email string, dip string, w http.ResponseWriter, r *http.Request) {
 			log.Println("Problem with smtp server:", err)
 		}
 	}()
-	Redis_client.Set(r.Context(), "captcha"+dip, vcode, 3*time.Minute)
+	Redis_client.Set(r.Context(), email, vcode, 3*time.Minute)
+	buff := make([]byte, 10)
+	rand.Read(buff)
+	tok := hex.EncodeToString(buff)
+	//jwt
+	jsonAnswer := `"{
+				"tok":"` + tok + `",
+				"email":"` + email + `",
+				"time":"` + fmt.Sprintf("%d", time.Now().Unix()) + `"
+			}"`
+	summed := sha256.Sum256([]byte(jsonAnswer))
+	signature, _ := rsa.SignPKCS1v15(rand.Reader, PrivateKey, crypto.SHA256, summed[:])
+	http.SetCookie(w, &http.Cookie{
+		Name: name,
+		Value: base64.StdEncoding.EncodeToString([]byte(`{
+				"answer": ` + jsonAnswer + `,
+				"signature": "` + base64.StdEncoding.EncodeToString(signature) + `"
+			}`)),
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+		Path:     "/auth/" + endpoint, // Only sent to auth endpoints
+		MaxAge:   120,
+	})
 	w.WriteHeader(http.StatusAccepted)
 }
