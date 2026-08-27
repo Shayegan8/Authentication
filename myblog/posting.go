@@ -3,7 +3,10 @@ package myblog
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
+
+	"github.com/jackc/pgx/v5"
 )
 
 func Post(w http.ResponseWriter, r *http.Request) {
@@ -69,6 +72,12 @@ func GetPosts(w http.ResponseWriter, r *http.Request) { // GetPosts dosent requi
 		BucketHandlement("getPosts", "getPosts", w, r)
 	case "POST":
 		payload := r.Header
+		page := payload.Get("page")
+		if page == "1" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
 		dip := payload.Get("realip")
 		cookie, ero := r.Cookie("getPosts")
 		userCSRF := payload.Get("csrf-Token")
@@ -122,7 +131,23 @@ func GetPosts(w http.ResponseWriter, r *http.Request) { // GetPosts dosent requi
 			return
 		}
 
-		rows, e := Postgres_client.Query(r.Context(), "SELECT * FROM posts ORDER BY created_at DESC LIMIT 10")
+		var rows pgx.Rows
+		var e error
+		if page == "" {
+			rows, e = Postgres_client.Query(r.Context(), "SELECT * FROM posts ORDER BY created_at DESC LIMIT 10")
+		} else {
+			numberPage, e := strconv.Atoi(page)
+			if e != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("Bad request"))
+				return
+			} else if numberPage < 0 {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("Bad request"))
+				return
+			}
+			rows, e = Postgres_client.Query(r.Context(), "SELECT * FROM posts OFFSET $1 ORDER BY created_at DESC LIMIT 10", numberPage*10)
+		}
 		if e != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Bad request"))
