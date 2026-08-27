@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -91,11 +92,11 @@ type PostData struct {
 func GetPost(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		BucketHandlement("getPost", "getPost", w, r)
+		BucketHandlement("getPost", "post/v/", w, r)
 	case "POST":
 		payload := r.Header
 		cookie, ero := r.Cookie("getPost")
-		postid := payload.Get("postid")
+		postid := mux.Vars(r)["postId"]
 		if postid == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
