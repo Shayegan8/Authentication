@@ -17,7 +17,11 @@ func Post(w http.ResponseWriter, r *http.Request) {
 		payload := r.Header
 		cookie, ero := r.Cookie("post")
 		userCSRF := payload.Get("csrf-Token")
-		if userCSRF == "" {
+		title := payload.Get("title")
+		info := payload.Get("info")
+		body := payload.Get("body")
+
+		if userCSRF == "" || info == "" || title == "" || body == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -54,9 +58,9 @@ func Post(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		removed, erro := Redis_client.LRem(r.Context(), "post"+email, 1, token).Result()
+		removed, ero := Redis_client.LRem(r.Context(), "post"+email, 1, token).Result()
 
-		if erro != nil {
+		if ero != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
 			return
@@ -65,11 +69,16 @@ func Post(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-		/*
-			we check for their refresh token
-			then we make a signed access token
-			then they can use that access token to make a post
-		*/
+
+		// titles are unique so if we insert with a title that exist we will get error created_at and postid is auto generated
+		_, ero = Postgres_client.Exec(r.Context(), "INSERT INTO posts(title, info, body) VALUES ($1, $2, $3)", title, info, body)
+		if ero != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		w.WriteHeader(http.StatusAccepted)
 	}
 }
 

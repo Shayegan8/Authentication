@@ -1,11 +1,196 @@
 package myblog
 
-import "net/http"
+import (
+	"encoding/json"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"github.com/jackc/pgx/v5"
+)
 
 func Comment(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		BucketHandlement("comment", "comment", w, r)
+	case "POST":
+		payload := r.Header
+		cookie, ero := r.Cookie("post")
+		userCSRF := payload.Get("csrf-Token")
+		post := payload.Get("post")
+		comment := payload.Get("info")
 
+		if userCSRF == "" || post == "" || comment == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		if ero != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		parts := strings.Split(cookie.Value, ",")
+		token := parts[0]
+		csrf := parts[1]
+		if token == "" || csrf == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		if userCSRF != csrf {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		email := ""
+
+		if Validator(email, w, r) {
+			return
+		}
+
+		if email == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		removed, ero := Redis_client.LRem(r.Context(), "comment"+email, 1, token).Result()
+
+		if ero != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		} else if removed == 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		// titles are unique so if we insert with a title that exist we will get error created_at and postid is auto generated
+		// post is title of the post and title of the post we know its unique
+		_, ero = Postgres_client.Exec(r.Context(), "INSERT INTO comments(post, body) VALUES ($1, $2)", post, comment)
+		if ero != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		w.WriteHeader(http.StatusAccepted)
+	}
 }
 
-func GetComments(w http.ResponseWriter, r *http.Request) {
+type CommentData struct {
+	Title string `json:"title"`
+	Info  string `json:"info"`
+}
 
+func GetComments(w http.ResponseWriter, r *http.Request) { // GetPosts dosent require refresh tokens
+	switch r.Method {
+	case "GET":
+		BucketHandlement("getComments", "getPosts", w, r)
+	case "POST":
+		payload := r.Header
+		page := payload.Get("page")
+		if page == "1" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		dip := payload.Get("realip")
+		cookie, ero := r.Cookie("getComments")
+		userCSRF := payload.Get("csrf-Token")
+		if userCSRF == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		if ero != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		parts := strings.Split(cookie.Value, ",")
+		token := parts[0]
+		csrf := parts[1]
+		if token == "" || csrf == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		if userCSRF != csrf {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		email := ""
+
+		if Validator(email, w, r) {
+			return
+		}
+
+		var removed int64
+		var erro error
+
+		if email == "" {
+			removed, erro = Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
+		} else {
+			removed, erro = Redis_client.LRem(r.Context(), "getComments"+email, 1, token).Result()
+		}
+
+		if erro != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		} else if removed == 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		var rows pgx.Rows
+		var e error
+		if page == "" {
+			rows, e = Postgres_client.Query(r.Context(), "SELECT * FROM comments ORDER BY created_at DESC LIMIT 10")
+		} else {
+			numberPage, e := strconv.Atoi(page)
+			if e != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("Bad request"))
+				return
+			} else if numberPage < 0 {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("Bad request"))
+				return
+			}
+			rows, e = Postgres_client.Query(r.Context(), "SELECT * FROM comments OFFSET $1 ORDER BY created_at DESC LIMIT 30", numberPage*10)
+		}
+		if e != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		comments := make([]PostData, 30)
+		for i := 0; rows.Next(); i++ {
+			rows.Scan(&comments[0].Title, &comments[0].Info)
+		}
+
+		jsoni := make(map[int]any, 30)
+		for i := range 30 {
+			jsoni[i] = PostData{Title: comments[i].Title, Info: comments[i].Info}
+		}
+		jsonResponse, eee := json.Marshal(jsoni)
+		if eee != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+		w.Write(jsonResponse)
+	}
 }
