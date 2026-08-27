@@ -1,6 +1,10 @@
 package myblog
 
-import "net/http"
+import (
+	"encoding/json"
+	"net/http"
+	"strings"
+)
 
 func Post(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -10,12 +14,31 @@ func Post(w http.ResponseWriter, r *http.Request) {
 		payload := r.Header
 		dip := payload.Get("realip")
 		cookie, ero := r.Cookie("post")
+		userCSRF := payload.Get("csrf-Token")
+		if userCSRF == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
 		if ero != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
 		}
-		token := cookie.Value
+		parts := strings.Split(cookie.Value, ",")
+		token := parts[0]
+		csrf := parts[1]
+		if token == "" || csrf == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		if userCSRF != csrf {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
 		removed, erro := Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
 
 		if erro != nil {
@@ -35,6 +58,11 @@ func Post(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type PostData struct {
+	Title string `json:"title"`
+	Info  string `json:"info"`
+}
+
 func GetPosts(w http.ResponseWriter, r *http.Request) { // GetPosts dosent require refresh tokens
 	switch r.Method {
 	case "GET":
@@ -42,14 +70,47 @@ func GetPosts(w http.ResponseWriter, r *http.Request) { // GetPosts dosent requi
 	case "POST":
 		payload := r.Header
 		dip := payload.Get("realip")
-		cookie, ero := r.Cookie("post")
+		cookie, ero := r.Cookie("getPosts")
+		userCSRF := payload.Get("csrf-Token")
+		if userCSRF == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
 		if ero != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
 		}
-		token := cookie.Value
-		removed, erro := Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
+		parts := strings.Split(cookie.Value, ",")
+		token := parts[0]
+		csrf := parts[1]
+		if token == "" || csrf == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		if userCSRF != csrf {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		email := ""
+
+		if Validator(email, w, r) {
+			return
+		}
+
+		var removed int64
+		var erro error
+
+		if email == "" {
+			removed, erro = Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
+		} else {
+			removed, erro = Redis_client.LRem(r.Context(), email, 1, token).Result()
+		}
 
 		if erro != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -61,5 +122,29 @@ func GetPosts(w http.ResponseWriter, r *http.Request) { // GetPosts dosent requi
 			return
 		}
 
+		rows, e := Postgres_client.Query(r.Context(), "SELECT * FROM posts ORDER BY created_at DESC LIMIT 10")
+		if e != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		posts := make([]PostData, 10)
+		for i := 0; rows.Next(); i++ {
+			rows.Scan(&posts[0].Title, &posts[0].Info)
+		}
+
+		jsoni := make(map[int]any, 10)
+		for i := range 10 {
+			jsoni[i] = PostData{Title: posts[i].Title, Info: posts[i].Info}
+		}
+		jsonResponse, eee := json.Marshal(jsoni)
+		if eee != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+		w.Write(jsonResponse)
 	}
 }

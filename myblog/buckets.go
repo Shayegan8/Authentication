@@ -31,27 +31,21 @@ func GenerateBucket(n int) []string {
 
 var l = log.Println
 
-/*
-Ok we rate limit better
-If just userData exist we do rate limit with userData, using userAgent make it more vulnerable
-*/
-func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *http.Request) {
-	dip := r.Header.Get("realip")
+func Validator(email string, w http.ResponseWriter, r *http.Request) bool {
 	userData, erro := r.Cookie("userData")
-	email := ""
 	if erro == nil {
 		decrypted, ere := base64.StdEncoding.DecodeString(userData.Value)
 		if ere != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
-			return
+			return true
 		}
 		var decryptedInMap map[string]string
 		erse := json.Unmarshal(decrypted, &decryptedInMap)
 		if erse != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
-			return
+			return true
 		}
 
 		sig := decryptedInMap["signature"]
@@ -61,7 +55,7 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 		if erri != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
-			return
+			return true
 		}
 
 		verErr := rsa.VerifyPKCS1v15(PublicKey, crypto.SHA256, summedJwt[:], decodedSig)
@@ -69,7 +63,7 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 		if verErr != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
-			return
+			return true
 		}
 
 		var marshaled map[string]string
@@ -77,7 +71,7 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 		if erro != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
-			return
+			return true
 		}
 
 		// then we check if the refresh token was exist
@@ -85,7 +79,7 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 		if e != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
-			return
+			return true
 		}
 		var refreshTokenBuffer []byte
 		if rows.Next() {
@@ -94,16 +88,26 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 			if refreshToken != marshaled["refreshToken"] {
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write([]byte("Bad request"))
-				return
+				return true
 			}
 			email = marshaled["email"]
 		} else {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
-			return
+			return true
 		}
-
 	}
+	return false
+}
+
+func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *http.Request) {
+	dip := r.Header.Get("realip")
+	email := ""
+
+	if Validator(email, w, r) {
+		return
+	}
+
 	exists := false
 	var count int64
 	var o error
@@ -171,8 +175,8 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 			Path:     "/auth/" + endpoint,
 			MaxAge:   30,
 		})
-		w.Write([]byte(hexed))
 		w.WriteHeader(http.StatusAccepted)
+		w.Write([]byte(hexed))
 		return
 	} else {
 		var counter int64
@@ -231,7 +235,7 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 			Path:     "/auth/" + endpoint,
 			MaxAge:   30,
 		})
-		w.Write([]byte(hexed))
 		w.WriteHeader(http.StatusAccepted)
+		w.Write([]byte(hexed))
 	}
 }
