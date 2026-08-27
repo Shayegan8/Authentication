@@ -15,9 +15,9 @@ func Comment(w http.ResponseWriter, r *http.Request) {
 		BucketHandlement("comment", "comment", w, r)
 	case "POST":
 		payload := r.Header
-		cookie, ero := r.Cookie("post")
+		cookie, ero := r.Cookie("comment")
 		userCSRF := payload.Get("csrf-Token")
-		post := payload.Get("post")
+		post := payload.Get("comment")
 		comment := payload.Get("info")
 
 		if userCSRF == "" || post == "" || comment == "" {
@@ -88,10 +88,10 @@ type CommentData struct {
 func GetComments(w http.ResponseWriter, r *http.Request) { // GetPosts dosent require refresh tokens
 	switch r.Method {
 	case "GET":
-		BucketHandlement("getComments", "getPosts", w, r)
+		BucketHandlement("getComments", "getComments", w, r)
 	case "POST":
 		payload := r.Header
-		page := payload.Get("page")
+		page := payload.Get("getComments")
 		if page == "1" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
