@@ -15,7 +15,6 @@ func Post(w http.ResponseWriter, r *http.Request) {
 		BucketHandlement("post", "post", w, r)
 	case "POST":
 		payload := r.Header
-		dip := payload.Get("realip")
 		cookie, ero := r.Cookie("post")
 		userCSRF := payload.Get("csrf-Token")
 		if userCSRF == "" {
@@ -42,7 +41,20 @@ func Post(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-		removed, erro := Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
+
+		email := ""
+
+		if Validator(email, w, r) {
+			return
+		}
+
+		if email == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		removed, erro := Redis_client.LRem(r.Context(), "post"+email, 1, token).Result()
 
 		if erro != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -118,7 +130,7 @@ func GetPosts(w http.ResponseWriter, r *http.Request) { // GetPosts dosent requi
 		if email == "" {
 			removed, erro = Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
 		} else {
-			removed, erro = Redis_client.LRem(r.Context(), email, 1, token).Result()
+			removed, erro = Redis_client.LRem(r.Context(), "getPosts"+email, 1, token).Result()
 		}
 
 		if erro != nil {

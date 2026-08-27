@@ -117,7 +117,7 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 			exists = true
 		}
 	} else {
-		count, o = Redis_client.Exists(r.Context(), email).Result()
+		count, o = Redis_client.Exists(r.Context(), name+email).Result()
 		if count != 0 {
 			exists = true
 		}
@@ -145,7 +145,7 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 			if email == "" {
 				Redis_client.Expire(r.Context(), name+dip, 30*time.Second)
 			} else {
-				Redis_client.Expire(r.Context(), email, 30*time.Second)
+				Redis_client.Expire(r.Context(), name+email, 30*time.Second)
 			}
 		}
 
@@ -158,11 +158,16 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 			Redis_client.LPush(r.Context(), name+dip, buckdatInterfaces...)
 			Redis_client.Expire(r.Context(), name+dip, 30*time.Second)
 		} else {
-			Redis_client.LPush(r.Context(), email, buckdatInterfaces...)
-			Redis_client.Expire(r.Context(), email, 30*time.Second)
+			Redis_client.LPush(r.Context(), name+email, buckdatInterfaces...)
+			Redis_client.Expire(r.Context(), name+email, 30*time.Second)
 		}
 
-		token, _ := Redis_client.LIndex(r.Context(), name+dip, -1).Result()
+		var token string
+		if email == "" {
+			token, _ = Redis_client.LIndex(r.Context(), name+dip, -1).Result()
+		} else {
+			token, _ = Redis_client.LIndex(r.Context(), name+email, -1).Result()
+		}
 		randomShit := make([]byte, 16)
 		rand.Read(randomShit)
 		hexed := hex.EncodeToString(randomShit)
@@ -201,8 +206,8 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 			result, err = Redis_client.LIndex(r.Context(), name+dip, -1).Result()
 			length, err = Redis_client.LLen(r.Context(), name+dip).Result()
 		} else {
-			result, err = Redis_client.LIndex(r.Context(), email, -1).Result()
-			length, err = Redis_client.LLen(r.Context(), email).Result()
+			result, err = Redis_client.LIndex(r.Context(), name+email, -1).Result()
+			length, err = Redis_client.LLen(r.Context(), name+email).Result()
 		}
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -214,8 +219,8 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 				Redis_client.LPush(r.Context(), name+dip, "in-queue")
 				Redis_client.Expire(r.Context(), name+dip, 30*time.Second)
 			} else {
-				Redis_client.LPush(r.Context(), email, "in-queue")
-				Redis_client.Expire(r.Context(), email, 30*time.Second)
+				Redis_client.LPush(r.Context(), name+email, "in-queue")
+				Redis_client.Expire(r.Context(), name+email, 30*time.Second)
 			}
 		}
 		if result == "in-queue" {
