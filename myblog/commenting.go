@@ -69,8 +69,6 @@ func Comment(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// titles are unique so if we insert with a title that exist we will get error created_at and postid is auto generated
-		// post is title of the post and title of the post we know its unique
 		_, ero = Postgres_client.Exec(r.Context(), "INSERT INTO comments(post, body) VALUES ($1, $2)", post, comment)
 		if ero != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -179,6 +177,7 @@ func GetComments(w http.ResponseWriter, r *http.Request) { // GetPosts dosent re
 		for i := 0; rows.Next(); i++ {
 			rows.Scan(&comments[0].Title, &comments[0].Info)
 		}
+		rows.Close()
 
 		jsoni := make(map[int]any, 30)
 		for i := range 30 {

@@ -62,6 +62,7 @@ func main() {
 
 	router.HandleFunc("/post", myblog.Post)
 	router.HandleFunc("/getPosts", myblog.GetPosts)
+	router.HandleFunc("/post/v/{postId}", myblog.GetPosts)
 
 	rrouter := handlers.LoggingHandler(os.Stdout, router)
 	rrouter = SecurityHandlers(rrouter)
