@@ -1,2 +1,5 @@
 myblog/config.json
-api
+auth
+search
+comments
+posts
