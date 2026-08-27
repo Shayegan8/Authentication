@@ -81,8 +81,8 @@ func Comment(w http.ResponseWriter, r *http.Request) {
 }
 
 type CommentData struct {
-	Title string `json:"title"`
-	Info  string `json:"info"`
+	Commentid string `json:"commentId"`
+	Body      string `json:"body"`
 }
 
 func GetComments(w http.ResponseWriter, r *http.Request) { // GetPosts dosent require refresh tokens
@@ -153,7 +153,7 @@ func GetComments(w http.ResponseWriter, r *http.Request) { // GetPosts dosent re
 		var rows pgx.Rows
 		var e error
 		if page == "" {
-			rows, e = Postgres_client.Query(r.Context(), "SELECT * FROM comments ORDER BY created_at DESC LIMIT 10")
+			rows, e = Postgres_client.Query(r.Context(), "SELECT commentid, body FROM comments ORDER BY created_at DESC LIMIT 30")
 		} else {
 			numberPage, e := strconv.Atoi(page)
 			if e != nil {
@@ -165,7 +165,7 @@ func GetComments(w http.ResponseWriter, r *http.Request) { // GetPosts dosent re
 				w.Write([]byte("Bad request"))
 				return
 			}
-			rows, e = Postgres_client.Query(r.Context(), "SELECT * FROM comments OFFSET $1 ORDER BY created_at DESC LIMIT 30", numberPage*10)
+			rows, e = Postgres_client.Query(r.Context(), "SELECT commentid, body FROM comments OFFSET $1 ORDER BY created_at DESC LIMIT 30", numberPage*10)
 		}
 		if e != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -173,15 +173,15 @@ func GetComments(w http.ResponseWriter, r *http.Request) { // GetPosts dosent re
 			return
 		}
 
-		comments := make([]PostData, 30)
+		comments := make([]CommentData, 30)
 		for i := 0; rows.Next(); i++ {
-			rows.Scan(&comments[0].Title, &comments[0].Info)
+			rows.Scan(&comments[0].Commentid, &comments[0].Body)
 		}
 		rows.Close()
 
 		jsoni := make(map[int]any, 30)
 		for i := range 30 {
-			jsoni[i] = PostData{Title: comments[i].Title, Info: comments[i].Info}
+			jsoni[i] = CommentData{Commentid: comments[i].Commentid, Body: comments[i].Body}
 		}
 		jsonResponse, eee := json.Marshal(jsoni)
 		if eee != nil {

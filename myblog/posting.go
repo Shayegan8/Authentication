@@ -244,7 +244,7 @@ func GetPosts(w http.ResponseWriter, r *http.Request) { // GetPosts dosent requi
 		var rows pgx.Rows
 		var e error
 		if page == "" {
-			rows, e = Postgres_client.Query(r.Context(), "SELECT postid, title,info FROM posts ORDER BY created_at DESC LIMIT 10")
+			rows, e = Postgres_client.Query(r.Context(), "SELECT postid, title, info FROM posts ORDER BY created_at DESC LIMIT 10")
 		} else {
 			numberPage, e := strconv.Atoi(page)
 			if e != nil {
