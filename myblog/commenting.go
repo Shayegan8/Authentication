@@ -91,7 +91,7 @@ func GetComments(w http.ResponseWriter, r *http.Request) { // GetPosts dosent re
 		BucketHandlement("getComments", "getComments", w, r)
 	case "POST":
 		payload := r.Header
-		page := payload.Get("getComments")
+		page := payload.Get("page")
 		if page == "1" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))

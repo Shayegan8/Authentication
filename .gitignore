@@ -1,5 +1,5 @@
 myblog/config.json
-auth
-search
-comments
-posts
+./auth
+./search
+./comments
+./posts
