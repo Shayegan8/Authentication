@@ -88,6 +88,7 @@ func main() {
 		"username",
 		"password",
 		"email",
+		"csrf-Token",
 	}), handlers.AllowedMethods([]string{"GET", "POST", "OPTIONS"}))(rrouter)
 
 	key, _ := rsa.GenerateKey(rand.Reader, 2048)

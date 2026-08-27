@@ -159,15 +159,19 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 		}
 
 		token, _ := Redis_client.LIndex(r.Context(), name+dip, -1).Result()
+		randomShit := make([]byte, 16)
+		rand.Read(randomShit)
+		hexed := hex.EncodeToString(randomShit)
 		http.SetCookie(w, &http.Cookie{
 			Name:     name,
-			Value:    token,
+			Value:    token + "," + hexed,
 			HttpOnly: true,
 			Secure:   true,
 			SameSite: http.SameSiteStrictMode,
 			Path:     "/auth/" + endpoint,
 			MaxAge:   30,
 		})
+		w.Write([]byte(hexed))
 		w.WriteHeader(http.StatusAccepted)
 		return
 	} else {
@@ -215,15 +219,19 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 			w.Write([]byte("Bad request"))
 			return
 		}
+		randomShit := make([]byte, 16)
+		rand.Read(randomShit)
+		hexed := hex.EncodeToString(randomShit)
 		http.SetCookie(w, &http.Cookie{
 			Name:     name,
-			Value:    result,
+			Value:    result + "," + hexed,
 			HttpOnly: true,
 			Secure:   true,
 			SameSite: http.SameSiteStrictMode,
 			Path:     "/auth/" + endpoint,
 			MaxAge:   30,
 		})
+		w.Write([]byte(hexed))
 		w.WriteHeader(http.StatusAccepted)
 	}
 }
