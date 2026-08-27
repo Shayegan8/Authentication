@@ -31,7 +31,7 @@ func GenerateBucket(n int) []string {
 
 var l = log.Println
 
-func Validator(email string, w http.ResponseWriter, r *http.Request) bool {
+func Validator(email *string, w http.ResponseWriter, r *http.Request) bool {
 	userData, erro := r.Cookie("userData")
 	if erro == nil {
 		decrypted, ere := base64.StdEncoding.DecodeString(userData.Value)
@@ -90,7 +90,7 @@ func Validator(email string, w http.ResponseWriter, r *http.Request) bool {
 				w.Write([]byte("Bad request"))
 				return true
 			}
-			email = marshaled["email"]
+			*email = marshaled["email"]
 		} else {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
@@ -104,7 +104,7 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 	dip := r.Header.Get("realip")
 	email := ""
 
-	if Validator(email, w, r) {
+	if Validator(&email, w, r) {
 		return
 	}
 

@@ -52,7 +52,7 @@ func Search(w http.ResponseWriter, r *http.Request) {
 
 		email := ""
 
-		if Validator(email, w, r) {
+		if Validator(&email, w, r) {
 			return
 		}
 

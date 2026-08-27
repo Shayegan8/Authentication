@@ -49,7 +49,7 @@ func Post(w http.ResponseWriter, r *http.Request) {
 
 		email := ""
 
-		if Validator(email, w, r) {
+		if Validator(&email, w, r) {
 			return
 		}
 
@@ -130,7 +130,7 @@ func GetPost(w http.ResponseWriter, r *http.Request) {
 
 		email := ""
 
-		if Validator(email, w, r) {
+		if Validator(&email, w, r) {
 			return
 		}
 
@@ -219,7 +219,7 @@ func GetPosts(w http.ResponseWriter, r *http.Request) { // GetPosts dosent requi
 
 		email := ""
 
-		if Validator(email, w, r) {
+		if Validator(&email, w, r) {
 			return
 		}
 

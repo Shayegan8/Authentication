@@ -47,7 +47,7 @@ func Comment(w http.ResponseWriter, r *http.Request) {
 
 		email := ""
 
-		if Validator(email, w, r) {
+		if Validator(&email, w, r) {
 			return
 		}
 
@@ -127,7 +127,7 @@ func GetComments(w http.ResponseWriter, r *http.Request) { // GetPosts dosent re
 
 		email := ""
 
-		if Validator(email, w, r) {
+		if Validator(&email, w, r) {
 			return
 		}
 
