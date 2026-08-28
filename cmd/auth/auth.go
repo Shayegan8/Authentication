@@ -61,7 +61,7 @@ func main() {
 
 	router := mux.NewRouter()
 
-	myblog.Auth = smtp.PlainAuth("", myblog.Config["user"], myblog.Config["password"], "smtp.gmail.com")
+	myblog.Auth = smtp.PlainAuth("", myblog.Config["username"], myblog.Config["password"], "smtp.gmail.com")
 	router.HandleFunc("/login", myblog.Login)
 	router.HandleFunc("/login/validation", myblog.LoginValidation)
 	router.HandleFunc("/login/validation/jwt", myblog.LoginValidationJWT)

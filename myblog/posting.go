@@ -17,7 +17,7 @@ func Post(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		payload := r.Header
 		cookie, ero := r.Cookie("post")
-		userCSRF := payload.Get("csrf-Token")
+		userCSRF := payload.Get("csrf-token")
 		title := payload.Get("title")
 		info := payload.Get("info")
 		body := payload.Get("body")
@@ -102,7 +102,7 @@ func GetPost(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-		userCSRF := payload.Get("csrf-Token")
+		userCSRF := payload.Get("csrf-token")
 		if userCSRF == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
@@ -191,7 +191,7 @@ func GetPosts(w http.ResponseWriter, r *http.Request) { // GetPosts dosent requi
 		}
 		dip := payload.Get("realip")
 		cookie, ero := r.Cookie("getPosts")
-		userCSRF := payload.Get("csrf-Token")
+		userCSRF := payload.Get("csrf-token")
 		if userCSRF == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))

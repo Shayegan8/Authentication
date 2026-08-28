@@ -16,7 +16,7 @@ func Comment(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		payload := r.Header
 		cookie, ero := r.Cookie("comment")
-		userCSRF := payload.Get("csrf-Token")
+		userCSRF := payload.Get("csrf-token")
 		post := payload.Get("comment")
 		comment := payload.Get("info")
 
@@ -99,7 +99,7 @@ func GetComments(w http.ResponseWriter, r *http.Request) { // GetPosts dosent re
 		}
 		dip := payload.Get("realip")
 		cookie, ero := r.Cookie("getComments")
-		userCSRF := payload.Get("csrf-Token")
+		userCSRF := payload.Get("csrf-token")
 		if userCSRF == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))

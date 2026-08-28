@@ -24,7 +24,7 @@ func Search(w http.ResponseWriter, r *http.Request) {
 		}
 		dip := payload.Get("realip")
 		cookie, ero := r.Cookie("search")
-		userCSRF := payload.Get("csrf-Token")
+		userCSRF := payload.Get("csrf-token")
 		if userCSRF == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
