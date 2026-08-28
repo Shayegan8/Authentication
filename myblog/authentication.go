@@ -20,8 +20,6 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/redis/go-redis/v9"
-	"github.com/wenlng/go-captcha-assets/resources/imagesv2"
-	"github.com/wenlng/go-captcha-assets/resources/tiles"
 	"github.com/wenlng/go-captcha/v2/slide"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -30,33 +28,7 @@ var PublicKey *rsa.PublicKey
 var PrivateKey *rsa.PrivateKey
 
 var Auth smtp.Auth
-
-func Init() slide.Captcha {
-	builder := slide.NewBuilder(
-		slide.WithEnableGraphVerticalRandom(true),
-	)
-
-	imgs, _ := imagesv2.GetImages()
-
-	graphs, _ := tiles.GetTiles()
-
-	var newGraphs = make([]*slide.GraphImage, 0, len(graphs))
-	for i := range graphs {
-		graph := graphs[i]
-		newGraphs = append(newGraphs, &slide.GraphImage{
-			OverlayImage: graph.OverlayImage,
-			MaskImage:    graph.MaskImage,
-			ShadowImage:  graph.ShadowImage,
-		})
-	}
-
-	builder.SetResources(
-		slide.WithGraphImages(newGraphs),
-		slide.WithBackgrounds(imgs),
-	)
-
-	return builder.Make()
-}
+var Captcha slide.Captcha
 
 func ForgetPassword(w http.ResponseWriter, r *http.Request) { // dosen't require refresh token
 	payload := r.Header
@@ -710,13 +682,16 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
+		l("OK im here in login")
 		rows, errio := Postgres_client.Query(r.Context(), "SELECT refreshToken, userid, password FROM users WHERE email=$1", marshaled["email"])
 		if errio != nil {
+			l("server cheror?", errio)
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
 			return
 		}
 		if rows.Next() {
+			l("ok some pussy pussy")
 			var refreshTokenHash []byte
 			var userid string
 			var hashedPassword []byte
@@ -738,8 +713,9 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			_, erra := Postgres_client.Exec(r.Context(), "UPDATE users SET refreshToken = $1 WHERE email=$2 RETURNING refreshToken, userid, password", refreshToken, marshaled["email"])
+			_, erra := Postgres_client.Exec(r.Context(), "UPDATE users SET refreshToken = $1 WHERE email=$2", refreshTokenHash, marshaled["email"])
 			if erra != nil {
+				l("so error is here?", erra)
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte("Server error"))
 				return
@@ -1686,8 +1662,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 }
 
 func CaptchaGeneration(dip string, name string, endpoint string, w http.ResponseWriter, r *http.Request) {
-	captcha := Init()
-	captData, err := captcha.Generate()
+	captData, err := Captcha.Generate()
 	if err != nil {
 		log.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)

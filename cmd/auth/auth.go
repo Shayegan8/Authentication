@@ -28,6 +28,9 @@ import (
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	"github.com/wenlng/go-captcha-assets/resources/imagesv2"
+	"github.com/wenlng/go-captcha-assets/resources/tiles"
+	"github.com/wenlng/go-captcha/v2/slide"
 )
 
 func SecurityHandlers(router http.Handler) http.Handler {
@@ -53,10 +56,38 @@ func SecurityHandlers(router http.Handler) http.Handler {
 	})
 }
 
+func Init() slide.Captcha {
+	builder := slide.NewBuilder(
+		slide.WithEnableGraphVerticalRandom(true),
+	)
+
+	imgs, _ := imagesv2.GetImages()
+
+	graphs, _ := tiles.GetTiles()
+
+	var newGraphs = make([]*slide.GraphImage, 0, len(graphs))
+	for i := range graphs {
+		graph := graphs[i]
+		newGraphs = append(newGraphs, &slide.GraphImage{
+			OverlayImage: graph.OverlayImage,
+			MaskImage:    graph.MaskImage,
+			ShadowImage:  graph.ShadowImage,
+		})
+	}
+
+	builder.SetResources(
+		slide.WithGraphImages(newGraphs),
+		slide.WithBackgrounds(imgs),
+	)
+
+	return builder.Make()
+}
+
 func main() {
 	json.Unmarshal(myblog.ConfigBuffer, &myblog.Config)
 	myblog.InitRDB()
 	myblog.InitPDB()
+	myblog.Captcha = Init()
 	// userid, email, username, password, refreshToken, login, timestamp
 
 	router := mux.NewRouter()
