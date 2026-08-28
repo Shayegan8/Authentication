@@ -3,3 +3,4 @@ myblog/config.json
 ./search
 ./comments
 ./posts
+auth
