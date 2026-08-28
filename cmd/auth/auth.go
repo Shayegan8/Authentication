@@ -1,20 +1,5 @@
 package main
 
-/*
-*
-ok so we need some handlers
-these are the apis we need
-comments
-posts
-authentication/authorization
-api itself
-
-after building all this states
-we separate them each making them individual apps
-and tunnel them with a reverse proxy (ngnix)
-
-*/
-
 import (
 	"crypto/rand"
 	"crypto/rsa"
@@ -88,8 +73,6 @@ func main() {
 	myblog.InitRDB()
 	myblog.InitPDB()
 	myblog.Captcha = Init()
-	// userid, email, username, password, refreshToken, login, timestamp
-
 	router := mux.NewRouter()
 
 	myblog.Auth = smtp.PlainAuth("", myblog.Config["username"], myblog.Config["password"], "smtp.gmail.com")
@@ -119,7 +102,7 @@ func main() {
 		"username",
 		"password",
 		"email",
-		"csrf-Token",
+		"csrf-token",
 	}), handlers.AllowedMethods([]string{"GET", "POST", "OPTIONS"}))(rrouter)
 
 	key, _ := rsa.GenerateKey(rand.Reader, 2048)
