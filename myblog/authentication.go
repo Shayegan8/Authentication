@@ -338,7 +338,7 @@ func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
 					"Subject: Shayegan's blog\r\n" +
 					"\r\n" +
 					"Click this link to change your password <a href=\"https://myhostnameididntgetyet.ir/auth/forget/\">https://myhostnameididntgetyet.ir/auth/forget/" + key + "</a>.\r\n")
-				err1 := smtp.SendMail("smtp.gmail.com:587", Auth, Config["user"], []string{marshaled["email"]}, []byte(msg))
+				err1 := smtp.SendMail("smtp.gmail.com:465", Auth, Config["user"], []string{marshaled["email"]}, []byte(msg))
 				if err1 != nil {
 					log.Println("Problem with smtp server", err1)
 				}
@@ -1800,7 +1800,7 @@ func Verify(email string, name string, endpoint string, username string, passwor
 			"Heres the code " + fmt.Sprint(vcode) + ".\r\n")
 		fmt.Println("the user", Config["user"])
 		fmt.Println("the password", Config["password"])
-		err := smtp.SendMail("smtp.gmail.com:587", Auth, Config["username"], []string{email}, []byte(msg))
+		err := smtp.SendMail("smtp.gmail.com:465", Auth, Config["username"], []string{email}, []byte(msg))
 		if err != nil {
 			log.Println("Problem with smtp server:", err)
 		}
