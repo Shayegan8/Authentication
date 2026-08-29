@@ -52,7 +52,8 @@ func ForgetPassword(w http.ResponseWriter, r *http.Request) { // dosen't require
 		parts := strings.Split(cookie.Value, ",")
 		token := parts[0]
 		csrf := parts[1]
-		if token == "" || csrf == "" {
+		sideline := parts[2]
+		if token == "" || csrf == "" || sideline == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -64,7 +65,7 @@ func ForgetPassword(w http.ResponseWriter, r *http.Request) { // dosen't require
 			return
 		}
 
-		removed, err := Redis_client.LRem(r.Context(), "forget"+dip, 1, token).Result()
+		removed, err := Redis_client.LRem(r.Context(), "forget"+dip+sideline, 1, token).Result()
 
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -101,7 +102,8 @@ func ForgetPasswordValidation(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Split(cookie.Value, ",")
 		token := parts[0]
 		csrf := parts[1]
-		if token == "" || csrf == "" {
+		sideline := parts[2]
+		if token == "" || csrf == "" || sideline == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -143,7 +145,7 @@ func ForgetPasswordValidation(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		removed, erro := Redis_client.LRem(r.Context(), "forgetValidation"+dip, 1, token).Result()
+		removed, erro := Redis_client.LRem(r.Context(), "forgetValidation"+dip+sideline, 1, token).Result()
 
 		if erro != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -227,7 +229,8 @@ func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Split(cookie.Value, ",")
 		token := parts[0]
 		csrf := parts[1]
-		if token == "" || csrf == "" {
+		sideline := parts[2]
+		if token == "" || csrf == "" || sideline == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -252,7 +255,7 @@ func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-		removed, err := Redis_client.LRem(r.Context(), "forgetValidationJWT"+dip, 1, token).Result()
+		removed, err := Redis_client.LRem(r.Context(), "forgetValidationJWT"+dip+sideline, 1, token).Result()
 
 		if err != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -376,7 +379,8 @@ func ForgetPasswordChangeLink(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Split(cookie.Value, ",")
 		token := parts[0]
 		csrf := parts[1]
-		if token == "" || csrf == "" {
+		sideline := parts[2]
+		if token == "" || csrf == "" || sideline == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -393,7 +397,7 @@ func ForgetPasswordChangeLink(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-		removed, err := Redis_client.LRem(r.Context(), "forgetLink"+dip, 1, token).Result()
+		removed, err := Redis_client.LRem(r.Context(), "forgetLink"+dip+sideline, 1, token).Result()
 
 		if err != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -529,6 +533,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Split(cookie.Value, ",")
 		token := parts[0]
 		csrf := parts[1]
+		sideline := parts[2]
 		if token == "" || csrf == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
@@ -541,7 +546,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		removed, err := Redis_client.LRem(r.Context(), "loginVS"+dip, 1, token).Result()
+		removed, err := Redis_client.LRem(r.Context(), "loginVS"+dip+sideline, 1, token).Result()
 
 		if err != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -767,6 +772,7 @@ func LoginValidationJWT(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Split(cookie.Value, ",")
 		token := parts[0]
 		csrf := parts[1]
+		sideline := parts[2]
 		if token == "" || csrf == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
@@ -784,7 +790,7 @@ func LoginValidationJWT(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		removed, err := Redis_client.LRem(r.Context(), "loginVJ"+dip, 1, token).Result()
+		removed, err := Redis_client.LRem(r.Context(), "loginVJ"+dip+sideline, 1, token).Result()
 
 		if err != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -895,7 +901,8 @@ func LoginValidation(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Split(cookie.Value, ",")
 		token := parts[0]
 		csrf := parts[1]
-		if token == "" || csrf == "" {
+		sideline := parts[2]
+		if token == "" || csrf == "" || sideline == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -912,7 +919,7 @@ func LoginValidation(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		removed, erro := Redis_client.LRem(r.Context(), "loginV"+dip, 1, token).Result()
+		removed, erro := Redis_client.LRem(r.Context(), "loginV"+dip+sideline, 1, token).Result()
 
 		if erro != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -1021,7 +1028,8 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Split(cookie.Value, ",")
 		token := parts[0]
 		csrf := parts[1]
-		if token == "" || csrf == "" {
+		sideline := parts[2]
+		if token == "" || csrf == "" || sideline == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -1038,7 +1046,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		removed, err := Redis_client.LRem(r.Context(), "login"+dip, 1, token).Result()
+		removed, err := Redis_client.LRem(r.Context(), "login"+dip+sideline, 1, token).Result()
 
 		if err != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -1078,7 +1086,8 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Split(cookie.Value, ",")
 		token := parts[0]
 		csrf := parts[1]
-		if token == "" || csrf == "" {
+		sideline := parts[2]
+		if token == "" || csrf == "" || sideline == "" {
 			l("vs token or shit")
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
@@ -1094,7 +1103,7 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 		verification := payload.Get("verification")
 		dip := payload.Get("realip")
 
-		removed, err := Redis_client.LRem(r.Context(), "registerVS"+dip, 1, token).Result()
+		removed, err := Redis_client.LRem(r.Context(), "registerVS"+dip+sideline, 1, token).Result()
 
 		if err != nil { // dont care if its server error or client bad request
 			l("vs redis err server ;-;")
@@ -1314,7 +1323,6 @@ func RegisterValidationJWT(w http.ResponseWriter, r *http.Request) {
 		BucketHandlement("registerVJ", "register/validation/jwt", w, r)
 	case "POST":
 		cookie, ero := r.Cookie("registerVJ")
-
 		userCSRF := payload.Get("csrf-token")
 		if userCSRF == "" {
 			w.WriteHeader(http.StatusBadRequest)
@@ -1329,7 +1337,8 @@ func RegisterValidationJWT(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Split(cookie.Value, ",")
 		token := parts[0]
 		csrf := parts[1]
-		if token == "" || csrf == "" {
+		sideline := parts[2]
+		if token == "" || csrf == "" || sideline == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -1349,7 +1358,7 @@ func RegisterValidationJWT(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		removed, err := Redis_client.LRem(r.Context(), "registerVJ"+dip, 1, token).Result()
+		removed, err := Redis_client.LRem(r.Context(), "registerVJ"+dip+sideline, 1, token).Result()
 
 		if err != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)
@@ -1467,7 +1476,8 @@ func RegisterValidation(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Split(cookie.Value, ",")
 		token := parts[0]
 		csrf := parts[1]
-		if token == "" || csrf == "" {
+		sideline := parts[2]
+		if token == "" || csrf == "" || sideline == "" {
 			l("token or csrf")
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
@@ -1487,7 +1497,7 @@ func RegisterValidation(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		removed, erro := Redis_client.LRem(r.Context(), "registerV"+dip, 1, token).Result()
+		removed, erro := Redis_client.LRem(r.Context(), "registerV"+dip+sideline, 1, token).Result()
 
 		if erro != nil { // dont care if its server error or client bad request
 			l("removed problem server ;-;")
@@ -1613,7 +1623,8 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Split(cookie.Value, ",")
 		token := parts[0]
 		csrf := parts[1]
-		if token == "" || csrf == "" {
+		sideline := parts[2]
+		if token == "" || csrf == "" || sideline == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -1635,7 +1646,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		dip := r.Header.Get("realip")
 		log.Println("Ip of that guy", dip)
 
-		removed, err := Redis_client.LRem(r.Context(), "register"+dip, 1, token).Result()
+		removed, err := Redis_client.LRem(r.Context(), "register"+dip+sideline, 1, token).Result()
 
 		if err != nil { // dont care if its server error or client bad request
 			w.WriteHeader(http.StatusInternalServerError)

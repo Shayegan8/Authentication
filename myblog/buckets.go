@@ -100,8 +100,20 @@ func Validator(email *string, w http.ResponseWriter, r *http.Request) bool {
 	return false
 }
 
+// protected by WAF
+func GetRandomToken(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "GET" {
+		randomShit := make([]byte, 16)
+		rand.Read(randomShit)
+		hexed := hex.EncodeToString(randomShit)
+		w.WriteHeader(http.StatusAccepted)
+		w.Write([]byte(hexed))
+	}
+}
+
 func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *http.Request) {
 	dip := r.Header.Get("realip")
+	sideline := r.Header.Get("sideline")
 	email := ""
 
 	if Validator(&email, w, r) {
@@ -112,12 +124,12 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 	var count int64
 	var o error
 	if email == "" {
-		count, o = Redis_client.Exists(r.Context(), name+dip).Result()
+		count, o = Redis_client.Exists(r.Context(), name+dip+sideline).Result()
 		if count != 0 {
 			exists = true
 		}
 	} else {
-		count, o = Redis_client.Exists(r.Context(), name+email).Result()
+		count, o = Redis_client.Exists(r.Context(), name+email+sideline).Result()
 		if count != 0 {
 			exists = true
 		}
@@ -134,18 +146,18 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 		var counter int64
 
 		if email == "" {
-			counter, _ = Redis_client.Incr(r.Context(), "counter"+name+dip).Result()
-			Redis_client.Expire(r.Context(), "counter"+name+dip, 30*time.Second)
+			counter, _ = Redis_client.Incr(r.Context(), "counter"+name+dip+sideline).Result()
+			Redis_client.Expire(r.Context(), "counter"+name+dip+sideline, 30*time.Second)
 		} else {
-			counter, _ = Redis_client.Incr(r.Context(), "counter"+email).Result()
-			Redis_client.Expire(r.Context(), "counter"+email, 30*time.Second)
+			counter, _ = Redis_client.Incr(r.Context(), "counter"+email+sideline).Result()
+			Redis_client.Expire(r.Context(), "counter"+email+sideline, 30*time.Second)
 		}
 		l("Whats the counter:", counter)
 		if counter == 1 {
 			if email == "" {
-				Redis_client.Expire(r.Context(), name+dip, 30*time.Second)
+				Redis_client.Expire(r.Context(), name+dip+sideline, 30*time.Second)
 			} else {
-				Redis_client.Expire(r.Context(), name+email, 30*time.Second)
+				Redis_client.Expire(r.Context(), name+email+sideline, 30*time.Second)
 			}
 		}
 
@@ -155,25 +167,25 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 			buckdatInterfaces[k] = v
 		}
 		if email == "" {
-			Redis_client.LPush(r.Context(), name+dip, buckdatInterfaces...)
-			Redis_client.Expire(r.Context(), name+dip, 30*time.Second)
+			Redis_client.LPush(r.Context(), name+dip+sideline, buckdatInterfaces...)
+			Redis_client.Expire(r.Context(), name+dip+sideline, 30*time.Second)
 		} else {
-			Redis_client.LPush(r.Context(), name+email, buckdatInterfaces...)
-			Redis_client.Expire(r.Context(), name+email, 30*time.Second)
+			Redis_client.LPush(r.Context(), name+email+sideline, buckdatInterfaces...)
+			Redis_client.Expire(r.Context(), name+email+sideline, 30*time.Second)
 		}
 
 		var token string
 		if email == "" {
-			token, _ = Redis_client.LIndex(r.Context(), name+dip, -1).Result()
+			token, _ = Redis_client.LIndex(r.Context(), name+dip+sideline, -1).Result()
 		} else {
-			token, _ = Redis_client.LIndex(r.Context(), name+email, -1).Result()
+			token, _ = Redis_client.LIndex(r.Context(), name+email+sideline, -1).Result()
 		}
 		randomShit := make([]byte, 16)
 		rand.Read(randomShit)
 		hexed := hex.EncodeToString(randomShit)
 		http.SetCookie(w, &http.Cookie{
 			Name:     name,
-			Value:    token + "," + hexed,
+			Value:    token + "," + hexed + "," + sideline,
 			HttpOnly: true,
 			Secure:   true,
 			SameSite: http.SameSiteStrictMode,
@@ -187,11 +199,11 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 		var counter int64
 
 		if email == "" {
-			counter, _ = Redis_client.Incr(r.Context(), "counter"+name+dip).Result()
-			Redis_client.Expire(r.Context(), "counter"+name+dip, 30*time.Second)
+			counter, _ = Redis_client.Incr(r.Context(), "counter"+name+dip+sideline).Result()
+			Redis_client.Expire(r.Context(), "counter"+name+dip+sideline, 30*time.Second)
 		} else {
-			counter, _ = Redis_client.Incr(r.Context(), "counter"+email).Result()
-			Redis_client.Expire(r.Context(), "counter"+email, 30*time.Second)
+			counter, _ = Redis_client.Incr(r.Context(), "counter"+email+sideline).Result()
+			Redis_client.Expire(r.Context(), "counter"+email+sideline, 30*time.Second)
 		}
 
 		if counter > 10 {
@@ -203,11 +215,11 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 		var length int64
 		var err error
 		if email == "" {
-			result, err = Redis_client.LIndex(r.Context(), name+dip, -1).Result()
-			length, err = Redis_client.LLen(r.Context(), name+dip).Result()
+			result, err = Redis_client.LIndex(r.Context(), name+dip+sideline, -1).Result()
+			length, err = Redis_client.LLen(r.Context(), name+dip+sideline).Result()
 		} else {
-			result, err = Redis_client.LIndex(r.Context(), name+email, -1).Result()
-			length, err = Redis_client.LLen(r.Context(), name+email).Result()
+			result, err = Redis_client.LIndex(r.Context(), name+email+sideline, -1).Result()
+			length, err = Redis_client.LLen(r.Context(), name+email+sideline).Result()
 		}
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -216,11 +228,11 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 		}
 		if length == 0 {
 			if email == "" {
-				Redis_client.LPush(r.Context(), name+dip, "in-queue")
-				Redis_client.Expire(r.Context(), name+dip, 30*time.Second)
+				Redis_client.LPush(r.Context(), name+dip+sideline, "in-queue")
+				Redis_client.Expire(r.Context(), name+dip+sideline, 30*time.Second)
 			} else {
-				Redis_client.LPush(r.Context(), name+email, "in-queue")
-				Redis_client.Expire(r.Context(), name+email, 30*time.Second)
+				Redis_client.LPush(r.Context(), name+email+sideline, "in-queue")
+				Redis_client.Expire(r.Context(), name+email+sideline, 30*time.Second)
 			}
 		}
 		if result == "in-queue" {
@@ -233,7 +245,7 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 		hexed := hex.EncodeToString(randomShit)
 		http.SetCookie(w, &http.Cookie{
 			Name:     name,
-			Value:    result + "," + hexed,
+			Value:    result + "," + hexed + "," + sideline,
 			HttpOnly: true,
 			Secure:   true,
 			SameSite: http.SameSiteStrictMode,
