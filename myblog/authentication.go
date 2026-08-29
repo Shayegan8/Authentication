@@ -351,71 +351,60 @@ func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func rateLimiter(dip string, name string, w http.ResponseWriter, r *http.Request) bool {
-	counter, err := Redis_client.Incr(r.Context(), name+dip).Result()
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Server error"))
-		return false
-	}
-	l("Whats the counter:", counter)
-	if counter == 1 {
-		Redis_client.Expire(r.Context(), name+dip, 2*time.Minute)
-	}
-
-	if counter > 10 {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("Bad request"))
-		return false
-	}
-	return true
-}
-
 func ForgetPasswordChangeLink(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	payload := r.Header
-	dip := payload.Get("realip")
 	switch r.Method {
 	case "GET":
-		if !rateLimiter(dip, "forgetLink", w, r) {
-			return
-		}
-		email, err := Redis_client.LPop(r.Context(), vars["token"]).Result()
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-			return
-		} else if email == "" {
+		BucketHandlement("forgetLink", "forgetPassword/", w, r)
+	case "POST":
+		password := payload.Get("password")
+
+		dip := payload.Get("realip")
+		cookie, ero := r.Cookie("forgetLink")
+		userCSRF := payload.Get("csrf-token")
+		if userCSRF == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
-		} else {
-			tokBuffer := make([]byte, 16)
-			rand.Read(tokBuffer)
-			jsonAnswer := `"{\"tok\":\"` + hex.EncodeToString(tokBuffer) + `\",\"email\": \"` + email + `\",\"time\": \"` + fmt.Sprintf("%d", time.Now().Unix()) + `\"}"`
-			jsonAnswerShould := `{"tok":"` + hex.EncodeToString(tokBuffer) + `","email": "` + email + `","time": "` + fmt.Sprintf("%d", time.Now().Unix()) + `"}`
-
-			summed := sha256.Sum256([]byte(jsonAnswerShould))
-			signature, _ := rsa.SignPKCS1v15(rand.Reader, PrivateKey, crypto.SHA256, summed[:])
-			http.SetCookie(w, &http.Cookie{
-				Name: "forgetPasswordChangeLink",
-				Value: base64.StdEncoding.EncodeToString([]byte(`{
-				"answer": ` + jsonAnswer + `,
-				"signature": "` + base64.StdEncoding.EncodeToString(signature) + `"
-			}`)),
-				HttpOnly: true,
-				Secure:   true,
-				SameSite: http.SameSiteStrictMode,
-				Path:     "/auth/forgetPassword",
-				MaxAge:   120,
-			})
-			w.WriteHeader(http.StatusAccepted)
 		}
-	case "POST":
-		if !rateLimiter(dip, "forgetLink", w, r) {
+		if ero != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
 			return
 		}
-		password := payload.Get("password")
+		parts := strings.Split(cookie.Value, ",")
+		token := parts[0]
+		csrf := parts[1]
+		if token == "" || csrf == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		if userCSRF != csrf {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		if token == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+		removed, err := Redis_client.LRem(r.Context(), "forgetLink"+dip, 1, token).Result()
+
+		if err != nil { // dont care if its server error or client bad request
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		} else if removed == 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
 		answerCookie, erria := r.Cookie("forgetPasswordChangeLink")
 		if erria != nil {
 			w.WriteHeader(http.StatusBadRequest)
