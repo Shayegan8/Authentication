@@ -15,6 +15,7 @@ func Comment(w http.ResponseWriter, r *http.Request) {
 		BucketHandlement("comment", "comment", w, r)
 	case "POST":
 		payload := r.Header
+		dip := payload.Get("realip")
 		cookie, ero := r.Cookie("comment")
 		userCSRF := payload.Get("csrf-token")
 		post := payload.Get("comment")
@@ -33,7 +34,8 @@ func Comment(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Split(cookie.Value, ",")
 		token := parts[0]
 		csrf := parts[1]
-		if token == "" || csrf == "" {
+		sideline := parts[2]
+		if token == "" || csrf == "" || sideline == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -45,19 +47,7 @@ func Comment(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		email := ""
-
-		if Validator(&email, w, r) {
-			return
-		}
-
-		if email == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		removed, ero := Redis_client.LRem(r.Context(), "comment"+email, 1, token).Result()
+		removed, ero := Redis_client.LRem(r.Context(), "comment"+dip+sideline, 1, token).Result()
 
 		if ero != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -113,7 +103,8 @@ func GetComments(w http.ResponseWriter, r *http.Request) { // GetPosts dosent re
 		parts := strings.Split(cookie.Value, ",")
 		token := parts[0]
 		csrf := parts[1]
-		if token == "" || csrf == "" {
+		sideline := parts[2]
+		if token == "" || csrf == "" || sideline == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -124,21 +115,7 @@ func GetComments(w http.ResponseWriter, r *http.Request) { // GetPosts dosent re
 			w.Write([]byte("Bad request"))
 			return
 		}
-
-		email := ""
-
-		if Validator(&email, w, r) {
-			return
-		}
-
-		var removed int64
-		var erro error
-
-		if email == "" {
-			removed, erro = Redis_client.LRem(r.Context(), dip+token, 1, token).Result()
-		} else {
-			removed, erro = Redis_client.LRem(r.Context(), "getComments"+email, 1, token).Result()
-		}
+		removed, erro := Redis_client.LRem(r.Context(), "getComments"+dip+sideline, 1, token).Result()
 
 		if erro != nil {
 			w.WriteHeader(http.StatusInternalServerError)
