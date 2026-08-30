@@ -4,10 +4,8 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	_ "embed"
-	"encoding/json"
 	"myblog/myblog"
 	"net/http"
-	"net/smtp"
 	"os"
 	"time"
 
@@ -69,13 +67,8 @@ func Init() slide.Captcha {
 }
 
 func main() {
-	json.Unmarshal(myblog.ConfigBuffer, &myblog.Config)
-	myblog.InitRDB()
-	myblog.InitPDB()
-	myblog.Captcha = Init()
 	router := mux.NewRouter()
 
-	myblog.Auth = smtp.PlainAuth("", myblog.Config["username"], myblog.Config["password"], "smtp.gmail.com")
 	router.HandleFunc("/token", myblog.GetRandomToken)
 	rrouter := handlers.LoggingHandler(os.Stdout, router)
 	rrouter = SecurityHandlers(rrouter)

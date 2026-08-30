@@ -1,13 +1,20 @@
 package myblog
 
 import (
+	"crypto"
 	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
 	"encoding/hex"
 	"log"
 	rnd "math/rand/v2"
 	"net/http"
+	"strings"
 	"time"
 )
+
+var PublicKeyy *rsa.PublicKey
+var PrivateKeyy *rsa.PrivateKey
 
 type BucketData struct {
 	tokens    []string
@@ -32,14 +39,31 @@ func GetRandomToken(w http.ResponseWriter, r *http.Request) {
 		randomShit := make([]byte, 16)
 		rand.Read(randomShit)
 		hexed := hex.EncodeToString(randomShit)
+		summed := sha256.Sum256([]byte(hexed))
+		signature, _ := rsa.SignPKCS1v15(rand.Reader, PrivateKeyy, crypto.SHA256, summed[:])
 		w.WriteHeader(http.StatusAccepted)
-		w.Write([]byte(hexed))
+		w.Write([]byte(hex.EncodeToString(signature) + "," + hexed))
 	}
 }
 
 func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *http.Request) {
 	dip := r.Header.Get("realip")
-	sideline := r.Header.Get("sideline")
+	sideshash := r.Header.Get("sideline") // signature,hexed
+	if sideshash == "" {
+		w.WriteHeader(http.StatusAccepted)
+		w.Write([]byte("Bad request"))
+		return
+	}
+	portions := strings.Split(sideshash, ",")
+	signatureForSideline := portions[0]
+	sideline := portions[1]
+	hashed := sha256.Sum256([]byte(sideline))
+	err := rsa.VerifyPKCS1v15(PublicKeyy, crypto.SHA256, hashed[:], []byte(signatureForSideline))
+	if err != nil {
+		w.WriteHeader(http.StatusAccepted)
+		w.Write([]byte("Bad request"))
+		return
+	}
 	exists := false
 	count, o := Redis_client.Exists(r.Context(), name+dip+sideline).Result()
 	if count != 0 {
