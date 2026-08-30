@@ -13,9 +13,6 @@ import (
 	"time"
 )
 
-var PublicKeyy *rsa.PublicKey
-var PrivateKeyy *rsa.PrivateKey
-
 type BucketData struct {
 	tokens    []string
 	timestamp int64
@@ -40,7 +37,7 @@ func GetRandomToken(w http.ResponseWriter, r *http.Request) {
 		rand.Read(randomShit)
 		hexed := hex.EncodeToString(randomShit)
 		summed := sha256.Sum256([]byte(hexed))
-		signature, _ := rsa.SignPKCS1v15(rand.Reader, PrivateKeyy, crypto.SHA256, summed[:])
+		signature, _ := rsa.SignPKCS1v15(rand.Reader, PrivateKey, crypto.SHA256, summed[:])
 		w.WriteHeader(http.StatusAccepted)
 		w.Write([]byte(hex.EncodeToString(signature) + "," + hexed))
 	}
@@ -58,7 +55,7 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 	signatureForSideline := portions[0]
 	sideline := portions[1]
 	hashed := sha256.Sum256([]byte(sideline))
-	err := rsa.VerifyPKCS1v15(PublicKeyy, crypto.SHA256, hashed[:], []byte(signatureForSideline))
+	err := rsa.VerifyPKCS1v15(PublicKey, crypto.SHA256, hashed[:], []byte(signatureForSideline))
 	if err != nil {
 		w.WriteHeader(http.StatusAccepted)
 		w.Write([]byte("Bad request"))

@@ -1,9 +1,9 @@
 package main
 
 import (
-	"crypto/rand"
-	"crypto/rsa"
+	"crypto/x509"
 	_ "embed"
+	"log"
 	"myblog/myblog"
 	"net/http"
 	"os"
@@ -74,10 +74,28 @@ func main() {
 	rrouter = SecurityHandlers(rrouter)
 	rrrouter := handlers.CORS(handlers.AllowedOrigins([]string{"http://127.0.0.1:5132"}), handlers.AllowCredentials(), handlers.AllowedHeaders([]string{}), handlers.AllowedMethods([]string{"GET", "OPTIONS"}))(rrouter)
 
-	key, _ := rsa.GenerateKey(rand.Reader, 2048)
+	privateK, e := os.ReadFile("~/private_key")
+	if e != nil {
+		log.Fatal(e)
+	}
 
-	myblog.PrivateKey = key
-	myblog.PublicKey = &key.PublicKey
+	prk, e := x509.ParsePKCS1PrivateKey(privateK)
+	if e != nil {
+		log.Fatal(e)
+	}
+
+	publicK, e := os.ReadFile("~/public_key")
+	if e != nil {
+		log.Fatal(e)
+	}
+
+	puk, e := x509.ParsePKCS1PublicKey(publicK)
+	if e != nil {
+		log.Fatal(e)
+	}
+
+	myblog.PrivateKey = prk
+	myblog.PublicKey = puk
 
 	server := &http.Server{
 		Handler:      rrrouter,

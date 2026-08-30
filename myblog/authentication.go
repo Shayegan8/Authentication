@@ -24,9 +24,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-var PublicKey *rsa.PublicKey
-var PrivateKey *rsa.PrivateKey
-
 var Auth smtp.Auth
 var Captcha slide.Captcha
 

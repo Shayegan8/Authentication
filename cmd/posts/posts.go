@@ -1,10 +1,10 @@
 package main
 
 import (
-	"crypto/rand"
-	"crypto/rsa"
+	"crypto/x509"
 	_ "embed"
 	"encoding/json"
+	"log"
 	"myblog/myblog"
 	"net/http"
 	"os"
@@ -64,10 +64,28 @@ func main() {
 		"csrf-token",
 	}), handlers.AllowedMethods([]string{"GET", "POST", "OPTIONS"}))(rrouter)
 
-	key, _ := rsa.GenerateKey(rand.Reader, 2048)
+	privateK, e := os.ReadFile("~/private_key")
+	if e != nil {
+		log.Fatal(e)
+	}
 
-	myblog.PrivateKey = key
-	myblog.PublicKey = &key.PublicKey
+	prk, e := x509.ParsePKCS1PrivateKey(privateK)
+	if e != nil {
+		log.Fatal(e)
+	}
+
+	publicK, e := os.ReadFile("~/public_key")
+	if e != nil {
+		log.Fatal(e)
+	}
+
+	puk, e := x509.ParsePKCS1PublicKey(publicK)
+	if e != nil {
+		log.Fatal(e)
+	}
+
+	myblog.PrivateKey = prk
+	myblog.PublicKey = puk
 
 	server := &http.Server{
 		Handler:      rrrouter,
