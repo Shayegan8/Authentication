@@ -8,6 +8,7 @@ import (
 
 var l = fmt.Println
 
+// this tests are old but i know the approach works perferct
 func main() {
 
 	// /register GET,POST
