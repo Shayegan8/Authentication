@@ -6,9 +6,11 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"log"
 	rnd "math/rand/v2"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -33,13 +35,13 @@ var l = log.Println
 // protected by WAF
 func GetRandomToken(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
-		randomShit := make([]byte, 16)
+		randomShit := make([]byte, 32)
 		rand.Read(randomShit)
 		hexed := hex.EncodeToString(randomShit)
 		summed := sha256.Sum256([]byte(hexed))
 		signature, _ := rsa.SignPKCS1v15(rand.Reader, PrivateKey, crypto.SHA256, summed[:])
 		w.WriteHeader(http.StatusAccepted)
-		w.Write([]byte(hex.EncodeToString(signature) + "," + hexed))
+		w.Write([]byte(hex.EncodeToString(signature) + "," + hexed + "," + fmt.Sprintf("%d", time.Now().Unix())))
 	}
 }
 
@@ -54,8 +56,14 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 	portions := strings.Split(sideshash, ",")
 	signatureForSideline := portions[0]
 	sideline := portions[1]
+	rtime, err := strconv.Atoi(portions[2])
+	if err != nil || (time.Now().Unix()-int64(rtime)) > 100 {
+		w.WriteHeader(http.StatusAccepted)
+		w.Write([]byte("Bad request"))
+		return
+	}
 	hashed := sha256.Sum256([]byte(sideline))
-	err := rsa.VerifyPKCS1v15(PublicKey, crypto.SHA256, hashed[:], []byte(signatureForSideline))
+	err = rsa.VerifyPKCS1v15(PublicKey, crypto.SHA256, hashed[:], []byte(signatureForSideline))
 	if err != nil {
 		w.WriteHeader(http.StatusAccepted)
 		w.Write([]byte("Bad request"))
