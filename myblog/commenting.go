@@ -75,7 +75,7 @@ func Comment(w http.ResponseWriter, r *http.Request) {
 
 		userid := userDataMap["userid"]
 
-		_, ero = Postgres_client.Exec(r.Context(), "INSERT INTO comments(post, body) VALUES ($1, $2)", post, comment)
+		_, ero = Postgres_client.Exec(r.Context(), "CALL insert_comment()", post, comment)
 		if ero != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
