@@ -22,6 +22,12 @@ func Post(w http.ResponseWriter, r *http.Request) {
 		title := payload.Get("title")
 		info := payload.Get("info")
 		body := payload.Get("body")
+		userData, ero := r.Cookie("userData")
+		if ero != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
 
 		if userCSRF == "" || info == "" || title == "" || body == "" {
 			w.WriteHeader(http.StatusBadRequest)
@@ -33,6 +39,7 @@ func Post(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
+
 		parts := strings.Split(cookie.Value, ",")
 		token := parts[0]
 		csrf := parts[1]
@@ -61,7 +68,23 @@ func Post(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		_, ero = Postgres_client.Exec(r.Context(), "INSERT INTO posts(title, info, body) VALUES ($1, $2, $3)", title, info, body)
+		var userDataMap map[string]string
+		ero = json.Unmarshal([]byte(userData.Value), &userDataMap)
+		if ero != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		userid := userDataMap["userid"]
+
+		if userid == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		_, ero = Postgres_client.Exec(r.Context(), "CALL insert_post($1, $2, $3, $4)", userid, title, info, body)
 		if ero != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))

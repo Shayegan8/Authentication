@@ -712,23 +712,11 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			value := `"{\"userid\": \"` + userid + `\",\"email\": \"` + marshaled["email"] + `\",\"refreshToken\": \"` + refreshTokenHex + `\"}"`
-			valueShould := `{"userid": "` + userid + `","email": "` + marshaled["email"] + `","refreshToken": "` + refreshTokenHex + `"}`
+			value := `{\"userid\": \"` + userid + `\",\"email\": \"` + marshaled["email"] + `\",\"refreshToken\": \"` + refreshTokenHex + `\"}`
 
-			hashedValue := sha256.Sum256([]byte(valueShould))
-
-			signature, eara := rsa.SignPKCS1v15(rand.Reader, PrivateKey, crypto.SHA256, hashedValue[:])
-			if eara != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte("Server error"))
-				return
-			}
 			http.SetCookie(w, &http.Cookie{
-				Name: "userData",
-				Value: base64.StdEncoding.EncodeToString([]byte(`{
-					"signature": "` + base64.StdEncoding.EncodeToString(signature) + `",
-					"answer": ` + value + `
-				}`)),
+				Name:     "userData",
+				Value:    value,
 				HttpOnly: true,
 				Secure:   true,
 				SameSite: http.SameSiteStrictMode,
@@ -1274,23 +1262,11 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			l("no next")
 			// give token and write success
-			value := `"{\"userid\": \"` + userid + `\",\"email\": \"` + marshaled["email"] + `\",\"refreshToken\": \"` + refreshTokenHex + `\"}"`
-			valueShould := `{"userid": "` + userid + `","email": "` + marshaled["email"] + `","refreshToken": "` + refreshTokenHex + `"}`
+			value := `{\"userid\": \"` + userid + `\",\"email\": \"` + marshaled["email"] + `\",\"refreshToken\": \"` + refreshTokenHex + `\"}`
 
-			hashedValue := sha256.Sum256([]byte(valueShould))
-
-			signature, eara := rsa.SignPKCS1v15(rand.Reader, PrivateKey, crypto.SHA256, hashedValue[:])
-			if eara != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte("Server error"))
-				return
-			}
 			http.SetCookie(w, &http.Cookie{
-				Name: "userData",
-				Value: base64.StdEncoding.EncodeToString([]byte(`{
-					"signature": "` + base64.StdEncoding.EncodeToString(signature) + `",
-					"answer": ` + value + `
-				}`)),
+				Name:     "userData",
+				Value:    value,
 				HttpOnly: true,
 				Secure:   true,
 				SameSite: http.SameSiteStrictMode,
@@ -1298,10 +1274,7 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 				MaxAge:   0,
 			})
 
-			l(base64.StdEncoding.EncodeToString([]byte(`{
-					"signature": "` + base64.StdEncoding.EncodeToString(signature) + `",
-					"answer": ` + value + `
-				}`)))
+			l(value)
 			fmt.Println("Whole registeration is completed")
 			w.WriteHeader(http.StatusAccepted)
 			return

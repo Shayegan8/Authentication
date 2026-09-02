@@ -20,6 +20,12 @@ func Comment(w http.ResponseWriter, r *http.Request) {
 		userCSRF := payload.Get("csrf-token")
 		post := payload.Get("comment")
 		comment := payload.Get("info")
+		userData, ero := r.Cookie("userData")
+		if ero != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
 
 		if userCSRF == "" || post == "" || comment == "" {
 			w.WriteHeader(http.StatusBadRequest)
@@ -58,6 +64,16 @@ func Comment(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
+
+		var userDataMap map[string]string
+		ero = json.Unmarshal([]byte(userData.Value), &userDataMap)
+		if ero != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		userid := userDataMap["userid"]
 
 		_, ero = Postgres_client.Exec(r.Context(), "INSERT INTO comments(post, body) VALUES ($1, $2)", post, comment)
 		if ero != nil {
