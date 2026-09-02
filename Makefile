@@ -6,5 +6,7 @@ posts:
 	go build -o posts ./cmd/posts
 search:
 	go build -o search ./cmd/search
+replies:
+	go build -o search ./cmd/replies
 clean:
 	rm auth comments posts ./search

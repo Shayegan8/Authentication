@@ -42,8 +42,8 @@ LANGUAGE plpgsql
 AS $$
 BEGIN
     IF EXISTS (SELECT 1 FROM admins WHERE userid=userid_) THEN
-        INSERT INTO posts(title, info, body) VALUES (title_, info_, body_);
         UPDATE users SET timestamp = EXTRACT(EPOCH FROM NOW()) WHERE userid = userid_;
+        INSERT INTO posts(title, info, body) VALUES (title_, info_, body_);
     ELSE
         RAISE EXCEPTION 'You are not admin'; -- in case user wasnt admin
     END IF;
@@ -72,8 +72,8 @@ AS $$
 BEGIN
     IF EXISTS (SELECT 1 FROM userid WHERE userid=userid_) THEN
         IF EXISTS (SELECT 1 FROM posts WHERE postid=postid_) THEN
-            INSERT INTO comments(postid, userid, body) VALUES(postid_, userid_, body_) RETURNING commentid;
             UPDATE users SET timestamp = EXTRACT(EPOCH FROM NOW()) WHERE userid = userid_;
+            INSERT INTO comments(postid, userid, body) VALUES(postid_, userid_, body_) RETURNING commentid;
         ELSE
             RAISE EXCEPTION 'Post dosen''t exist';
         END IF;
@@ -93,8 +93,12 @@ AS $$
 BEGIN
     IF EXISTS (SELECT 1 FROM userid WHERE userid=userid_) THEN
         IF EXISTS (SELECT 1 FROM posts WHERE postid=postid_) THEN
-            INSERT INTO replies(postid, userid, commentid, body) VALUES (postid_, userid_, commentid_, body_) RETURNING replyid;
-            UPDATE users SET timestamp = EXTRACT(EPOCH FROM NOW()) WHERE userid = userid_;
+            IF EXISTS (SELECT 1 FROM comments WHERE commentid=commentid_) THEN
+                UPDATE users SET timestamp = EXTRACT(EPOCH FROM NOW()) WHERE userid = userid_;
+                INSERT INTO replies(postid, userid, commentid, body) VALUES (postid_, userid_, commentid_, body_) RETURNING replyid;
+            ELSE
+                RAISE EXCEPTION 'Comment dosent''t exist';
+            END IF;
         ELSE
             RAISE EXCEPTION 'Post dosen''t exist';
         END IF;

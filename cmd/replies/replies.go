@@ -41,12 +41,10 @@ func main() {
 	json.Unmarshal(myblog.ConfigBuffer, &myblog.Config)
 	myblog.InitRDB()
 	myblog.InitPDB()
-
 	router := mux.NewRouter()
 
-	router.HandleFunc("/post", myblog.Post)
-	router.HandleFunc("/getPosts", myblog.GetPosts)
-	router.HandleFunc("/post/v/{postId}", myblog.GetPost)
+	router.HandleFunc("/reply", myblog.Reply)
+	router.HandleFunc("/getReplies", myblog.GetReplies)
 
 	rrouter := handlers.LoggingHandler(os.Stdout, router)
 	rrouter = SecurityHandlers(rrouter)
@@ -58,12 +56,11 @@ func main() {
 		"captchaAnswer",
 		"content-type",
 		"verification",
-		"csrf-token",
-		"title",
-		"info",
-		"body",
 		"postid",
+		"commentid",
+		"body",
 		"page",
+		"csrf-token",
 	}), handlers.AllowedMethods([]string{"GET", "POST", "OPTIONS"}))(rrouter)
 
 	privateK, e := os.ReadFile("~/private_key")
@@ -91,7 +88,7 @@ func main() {
 
 	server := &http.Server{
 		Handler:      rrrouter,
-		Addr:         "127.0.0.1:1235",
+		Addr:         "127.0.0.1:1236",
 		WriteTimeout: 30 * time.Second,
 		ReadTimeout:  30 * time.Second,
 	}

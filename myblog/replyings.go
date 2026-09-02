@@ -6,22 +6,21 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5"
 )
 
-func Post(w http.ResponseWriter, r *http.Request) {
+func Reply(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		BucketHandlement("post", "post", w, r)
+		BucketHandlement("reply", "reply", w, r)
 	case "POST":
 		payload := r.Header
 		dip := payload.Get("realip")
-		cookie, ero := r.Cookie("post")
+		cookie, ero := r.Cookie("reply")
 		userCSRF := payload.Get("csrf-token")
-		title := payload.Get("title")
-		info := payload.Get("info")
 		body := payload.Get("body")
+		postid := payload.Get("postid")
+		commentid := payload.Get("commentid")
 		userData, ero := r.Cookie("userData")
 		if ero != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -29,7 +28,7 @@ func Post(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if userCSRF == "" || info == "" || title == "" || body == "" {
+		if userCSRF == "" || postid == "" || body == "" || commentid == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -51,7 +50,7 @@ func Post(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		removed, ero := Redis_client.LRem(r.Context(), "post"+dip+sideline, 1, token).Result()
+		removed, ero := Redis_client.LRem(r.Context(), "reply"+dip+sideline, 1, token).Result()
 
 		if ero != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -79,7 +78,7 @@ func Post(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		_, ero = Postgres_client.Exec(r.Context(), "CALL insert_post($1, $2, $3, $4)", userid, title, info, body)
+		_, ero = Postgres_client.Exec(r.Context(), "CALL insert_reply($1, $2, $3, $4)", postid, userid, commentid, body)
 		if ero != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
@@ -90,96 +89,15 @@ func Post(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-type PostData struct {
-	Title string `json:"title"`
-	Id    string `json:"postid"`
-	Info  string `json:"info"`
-	Body  string `json:"body"`
+type ReplyData struct {
+	Replyid string `json:"replyid"`
+	Body    string `json:"body"`
 }
 
-func GetPost(w http.ResponseWriter, r *http.Request) {
+func GetReplies(w http.ResponseWriter, r *http.Request) { // GetPosts dosent require refresh tokens
 	switch r.Method {
 	case "GET":
-		BucketHandlement("getPost", "post/v/", w, r)
-	case "POST":
-		payload := r.Header
-		cookie, ero := r.Cookie("getPost")
-		postid := mux.Vars(r)["postid"]
-		dip := payload.Get("realip")
-		if postid == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		userCSRF := payload.Get("csrf-token")
-		if userCSRF == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		if ero != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		parts := strings.Split(cookie.Value, ",")
-		token := parts[0]
-		csrf := parts[1]
-		sideline := parts[2]
-		if token == "" || csrf == "" || sideline == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		if userCSRF != csrf {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		removed, erro := Redis_client.LRem(r.Context(), "getPost"+dip+sideline, 1, token).Result()
-
-		if erro != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-			return
-		} else if removed == 0 {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		rows, e := Postgres_client.Query(r.Context(), "SELECT title, info, body FROM posts where postid=$1", postid)
-		if e != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		post := PostData{}
-		if rows.Next() {
-			rows.Close()
-			rows.Scan(&post.Title, &post.Info, &post.Body)
-		} else {
-			rows.Close()
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		w.WriteHeader(http.StatusAccepted)
-		w.Write([]byte(`{
-			"title": "` + post.Title + `",
-			"info": "` + post.Info + `",
-			"body": "` + post.Body + `",
-		}`))
-	}
-}
-
-func GetPosts(w http.ResponseWriter, r *http.Request) { // GetPosts dosent require refresh tokens
-	switch r.Method {
-	case "GET":
-		BucketHandlement("getPosts", "getPosts", w, r)
+		BucketHandlement("getReplies", "getReplies", w, r)
 	case "POST":
 		payload := r.Header
 		page := payload.Get("page")
@@ -189,7 +107,7 @@ func GetPosts(w http.ResponseWriter, r *http.Request) { // GetPosts dosent requi
 			return
 		}
 		dip := payload.Get("realip")
-		cookie, ero := r.Cookie("getPosts")
+		cookie, ero := r.Cookie("getReplies")
 		userCSRF := payload.Get("csrf-token")
 		if userCSRF == "" {
 			w.WriteHeader(http.StatusBadRequest)
@@ -216,7 +134,7 @@ func GetPosts(w http.ResponseWriter, r *http.Request) { // GetPosts dosent requi
 			w.Write([]byte("Bad request"))
 			return
 		}
-		removed, erro := Redis_client.LRem(r.Context(), "getPosts"+dip+sideline, 1, token).Result()
+		removed, erro := Redis_client.LRem(r.Context(), "getReplies"+dip+sideline, 1, token).Result()
 
 		if erro != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -231,7 +149,7 @@ func GetPosts(w http.ResponseWriter, r *http.Request) { // GetPosts dosent requi
 		var rows pgx.Rows
 		var e error
 		if page == "" {
-			rows, e = Postgres_client.Query(r.Context(), "SELECT postid, title, info FROM posts ORDER BY created_at DESC LIMIT 10")
+			rows, e = Postgres_client.Query(r.Context(), "SELECT replyid, body FROM replies ORDER BY created_at DESC LIMIT 30")
 		} else {
 			numberPage, e := strconv.Atoi(page)
 			if e != nil {
@@ -243,7 +161,7 @@ func GetPosts(w http.ResponseWriter, r *http.Request) { // GetPosts dosent requi
 				w.Write([]byte("Bad request"))
 				return
 			}
-			rows, e = Postgres_client.Query(r.Context(), "SELECT postid, title, info FROM posts OFFSET $1 ORDER BY created_at DESC LIMIT 10", numberPage*30)
+			rows, e = Postgres_client.Query(r.Context(), "SELECT replyid, body FROM replies OFFSET $1 ORDER BY created_at DESC LIMIT 30", numberPage*30)
 		}
 		if e != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -251,15 +169,15 @@ func GetPosts(w http.ResponseWriter, r *http.Request) { // GetPosts dosent requi
 			return
 		}
 
-		posts := make([]PostData, 10)
+		replies := make([]ReplyData, 30)
 		for i := 0; rows.Next(); i++ {
-			rows.Scan(&posts[0].Id, &posts[0].Title, &posts[0].Info)
+			rows.Scan(&replies[0].Replyid, &replies[0].Body)
 		}
 		rows.Close()
 
-		jsoni := make(map[int]any, 10)
-		for i := range 10 {
-			jsoni[i] = PostData{Title: posts[i].Title, Info: posts[i].Info, Id: posts[i].Id}
+		jsoni := make(map[int]any, 30)
+		for i := range 30 {
+			jsoni[i] = ReplyData{Replyid: replies[i].Replyid, Body: replies[i].Body}
 		}
 		jsonResponse, eee := json.Marshal(jsoni)
 		if eee != nil {

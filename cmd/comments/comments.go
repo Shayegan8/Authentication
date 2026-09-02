@@ -56,9 +56,9 @@ func main() {
 		"captchaAnswer",
 		"content-type",
 		"verification",
-		"username",
-		"password",
-		"email",
+		"postid",
+		"body",
+		"page",
 		"csrf-token",
 	}), handlers.AllowedMethods([]string{"GET", "POST", "OPTIONS"}))(rrouter)
 

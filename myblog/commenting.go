@@ -18,8 +18,8 @@ func Comment(w http.ResponseWriter, r *http.Request) {
 		dip := payload.Get("realip")
 		cookie, ero := r.Cookie("comment")
 		userCSRF := payload.Get("csrf-token")
-		post := payload.Get("comment")
-		comment := payload.Get("info")
+		body := payload.Get("body")
+		postid := payload.Get("postid")
 		userData, ero := r.Cookie("userData")
 		if ero != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -27,16 +27,12 @@ func Comment(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if userCSRF == "" || post == "" || comment == "" {
+		if userCSRF == "" || postid == "" || body == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
 		}
-		if ero != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
+
 		parts := strings.Split(cookie.Value, ",")
 		token := parts[0]
 		csrf := parts[1]
@@ -75,7 +71,13 @@ func Comment(w http.ResponseWriter, r *http.Request) {
 
 		userid := userDataMap["userid"]
 
-		_, ero = Postgres_client.Exec(r.Context(), "CALL insert_comment()", post, comment)
+		if userid == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		_, ero = Postgres_client.Exec(r.Context(), "CALL insert_comment($1, $2, $3)", postid, userid, body)
 		if ero != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
@@ -158,7 +160,7 @@ func GetComments(w http.ResponseWriter, r *http.Request) { // GetPosts dosent re
 				w.Write([]byte("Bad request"))
 				return
 			}
-			rows, e = Postgres_client.Query(r.Context(), "SELECT commentid, body FROM comments OFFSET $1 ORDER BY created_at DESC LIMIT 30", numberPage*10)
+			rows, e = Postgres_client.Query(r.Context(), "SELECT commentid, body FROM comments OFFSET $1 ORDER BY created_at DESC LIMIT 30", numberPage*30)
 		}
 		if e != nil {
 			w.WriteHeader(http.StatusInternalServerError)
