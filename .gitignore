@@ -1,7 +1,7 @@
 myblog/config.json
-./auth
-./search
-./comments
-./posts
 auth
-frontend
+search
+comments
+posts
+replies
+frontend/node_modules
