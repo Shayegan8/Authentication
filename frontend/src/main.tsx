@@ -14,7 +14,9 @@ createRoot(document.getElementById('root')!).render(
       <Route path='/forgetPassword' />
       <Route path='/forgetPassword/validate' />
       <Route path='/forgetPassword/:key' />
-      
+      <Route path='/post/:postid' />
+      <Route path='/posts' />
+      <Route path='/dashboard' />
     </Routes>
   </BrowserRouter>
 )
