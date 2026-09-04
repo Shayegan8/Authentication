@@ -1,14 +1,11 @@
 import './App.css'
 
-function App() {
+export default function App() {
   return (
     <>
-    
-      <div>
+      <div className='container'>
         
       </div>
     </>
   )
 }
-
-export default App
