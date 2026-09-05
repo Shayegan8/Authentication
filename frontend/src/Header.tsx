@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react"
+import { Link } from "react-router-dom"
 
 
 export default function Header() {
@@ -11,7 +12,7 @@ export default function Header() {
                 v.style.color = "gray"
             }
 
-            v.addEventListener("focus", () => {
+            v.addEventListener("focusin", () => {
                 v.textContent = ""
                 v.style.color = "black"
             })
@@ -33,18 +34,30 @@ export default function Header() {
 
     return (
         <div className="head">
-            <div>
+            <div className="head-left">
                 <div className="log">
                     Shayegan8
                 </div>
-                <div className="searchbar" contentEditable="true" ref={searchBarRef}>
 
+                <div
+                    className="searchbar"
+                    contentEditable="true"
+                    ref={searchBarRef}
+                    data-placeholder="Search..."
+                />
+            </div>
+
+            <div className="head-right">
+                <Link className="posts" to="/posts">
+                    Posts
+                </Link>
+
+                <div className="auth-links">
+                    <Link className="auth" to="/login">Signin</Link>
+                    <span>/</span>
+                    <Link className="auth" to="/register">Signup</Link>
                 </div>
             </div>
-            <div className="Posts">
-
-            </div>
-            <div className="auth"></div>
         </div>
     )
 }
