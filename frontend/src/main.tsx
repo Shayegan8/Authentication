@@ -7,21 +7,6 @@ createRoot(document.getElementById('root')!).render(
   <BrowserRouter>
     <Routes>
       <Route path='/' element={<App />} />
-      <Route path='/login' />
-      <Route path='/login/validation' />
-      <Route path='/login/validation/jwt' />
-      <Route path='/login/validation/submit' />
-      <Route path='/register' />
-      <Route path='/register/validation' />
-      <Route path='/register/validation/jwt' />
-      <Route path='/register/validation/submit' />
-      <Route path='/forgetPassword' />
-      <Route path='/forgetPassword/validate' />
-      <Route path='/forgetPassword/validate/jwt' />
-      <Route path='/forgetPassword/:key' />
-      <Route path='/post/:postid' />
-      <Route path='/posts' />
-      <Route path='/dashboard' />
     </Routes>
   </BrowserRouter>
 )
