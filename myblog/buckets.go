@@ -40,6 +40,8 @@ func GetRandomToken(w http.ResponseWriter, r *http.Request) {
 		hexed := hex.EncodeToString(randomShit)
 		summed := sha256.Sum256([]byte(hexed))
 		signature, _ := rsa.SignPKCS1v15(rand.Reader, PrivateKey, crypto.SHA256, summed[:])
+		l("So my signature is:", hex.EncodeToString(signature))
+		l("Thing we signed:", hexed)
 		w.WriteHeader(http.StatusAccepted)
 		w.Write([]byte(hex.EncodeToString(signature) + "," + hexed + "," + fmt.Sprintf("%d", time.Now().Unix())))
 	}
@@ -49,33 +51,42 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 	dip := r.Header.Get("realip")
 	sideshash := r.Header.Get("sideline") // signature,hexed
 	if sideshash == "" {
-		w.WriteHeader(http.StatusAccepted)
+		l("here?")
+		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("Bad request"))
 		return
 	}
 	portions := strings.Split(sideshash, ",")
 	signatureForSideline := portions[0]
+	l("So my signature is:", signatureForSideline)
 	sideline := portions[1]
+	l("Thing we signed:", sideline)
 	rtime, err := strconv.Atoi(portions[2])
 	if err != nil || (time.Now().Unix()-int64(rtime)) > 100 {
-		w.WriteHeader(http.StatusAccepted)
+		l("or here?")
+		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("Bad request"))
 		return
 	}
 	hashed := sha256.Sum256([]byte(sideline))
-	err = rsa.VerifyPKCS1v15(PublicKey, crypto.SHA256, hashed[:], []byte(signatureForSideline))
+	signatureForSidelineDecoded, err := hex.DecodeString(signatureForSideline)
+	err = rsa.VerifyPKCS1v15(PublicKey, crypto.SHA256, hashed[:], signatureForSidelineDecoded)
 	if err != nil {
-		w.WriteHeader(http.StatusAccepted)
+		l("maybe here?")
+		l(err)
+		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("Bad request"))
 		return
 	}
 	exists := false
 	count, o := Redis_client.Exists(r.Context(), name+dip+sideline).Result()
 	if count != 0 {
+		l("hereeee??")
 		exists = true
 	}
-
+	l("passed?")
 	if o != nil {
+		l("or not passed?")
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Server error"))
 		return
@@ -113,11 +124,12 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 			Path:     "/auth/" + endpoint,
 			MaxAge:   30,
 		})
+		l(token + "," + hexed + "," + sideline)
 		w.WriteHeader(http.StatusAccepted)
 		w.Write([]byte(hexed))
 		return
 	} else {
-
+		l("adawpdpaawodpad")
 		counter, _ := Redis_client.Incr(r.Context(), "counter"+name+dip+sideline).Result()
 		Redis_client.Expire(r.Context(), "counter"+name+dip+sideline, 30*time.Second)
 
@@ -154,6 +166,7 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 			Path:     "/auth/" + endpoint,
 			MaxAge:   30,
 		})
+		l(result + "," + hexed + "," + sideline)
 		w.WriteHeader(http.StatusAccepted)
 		w.Write([]byte(hexed))
 	}

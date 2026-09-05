@@ -4,6 +4,8 @@ export default function Middle() {
     const loc = useLocation()
     const params = useParams()
     switch (loc.pathname) {
+        case "/":
+            break
         case "/register":
             break
         case "/register/validation":

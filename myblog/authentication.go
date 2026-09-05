@@ -728,7 +728,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		} else {
 			rows.Close()
-			w.WriteHeader(http.StatusAccepted)
+			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 	}
@@ -994,6 +994,7 @@ func LoginValidation(w http.ResponseWriter, r *http.Request) {
 func Login(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
+		l("thiiiis")
 		BucketHandlement("login", "login", w, r)
 	case "POST":
 		payload := r.Header
@@ -1322,7 +1323,7 @@ func RegisterValidationJWT(w http.ResponseWriter, r *http.Request) {
 		dip := payload.Get("realip")
 		username := payload.Get("username")
 		password := payload.Get("password")
-		if username == "" || password == "" || token == "" {
+		if username == "" || password == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return

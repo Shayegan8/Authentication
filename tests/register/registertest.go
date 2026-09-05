@@ -2,28 +2,36 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 )
 
 var l = fmt.Println
 
-// this tests are old but i know the approach works perferct
 func main() {
 
 	// /register GET,POST
 
-	bucket1, _ := http.Get("http://127.0.0.1:1234/register")
-
+	respak, _ := http.Get("http://127.0.0.1:1234/token")
+	bufjerk, _ := io.ReadAll(respak.Body)
+	respak.Body.Close()
+	l(string(bufjerk))
+	bucket1, _ := http.NewRequest("GET", "http://127.0.0.1:1235/register", nil)
+	bucket1.Header.Set("sideline", string(bufjerk))
+	client0 := &http.Client{}
 	// GET
-	bucket1Cookie := bucket1.Cookies()[0]
+	resp0, _ := client0.Do(bucket1)
+	var buffesag []byte
+	resp0.Body.Read(buffesag)
+	l(string(buffesag))
+	bucket1Cookie := resp0.Cookies()[0]
 	vals := strings.Split(bucket1Cookie.Value, ",")
 	csrf_token := vals[1]
-	l("/register GET status", bucket1.Status)
-	bucket1.Body.Close()
+	l("/register GET status", resp0.Status)
 
 	// POST
-	toRegister, _ := http.NewRequest("POST", "http://127.0.0.1:1234/register", nil)
+	toRegister, _ := http.NewRequest("POST", "http://127.0.0.1:1235/register", nil)
 	toRegister.AddCookie(bucket1Cookie)
 
 	toRegister.Header.Set("csrf-token", csrf_token)
@@ -34,14 +42,19 @@ func main() {
 	captchaGeneratedCookie := toRegisterResponse.Cookies()[0]
 	// /register/validation GET,POST
 
+	respak1, _ := http.Get("http://127.0.0.1:1234/token")
+	bufjerk1, _ := io.ReadAll(respak1.Body)
+	respak1.Body.Close()
+
 	// GET
-	bucket2, _ := http.Get("http://127.0.0.1:1234/register/validation")
-	bucket2Cookie := bucket2.Cookies()[0]
+	bucket2, _ := http.NewRequest("GET", "http://127.0.0.1:1235/register/validation", nil)
+	client00 := &http.Client{}
+	bucket2.Header.Set("sideline", string(bufjerk1))
+	resp00, _ := client00.Do(bucket2)
+	bucket2Cookie := resp00.Cookies()[0]
 	vals = strings.Split(bucket2Cookie.Value, ",")
 	csrf_token = vals[1]
-	l("/register/validation GET status", bucket2.Status)
-
-	bucket2.Body.Close()
+	l("/register/validation GET status", resp00.Status)
 
 	var x string
 	var y string
@@ -50,7 +63,7 @@ func main() {
 
 	// POST
 
-	toRegisterValidation, _ := http.NewRequest("POST", "http://127.0.0.1:1234/register/validation", nil)
+	toRegisterValidation, _ := http.NewRequest("POST", "http://127.0.0.1:1235/register/validation", nil)
 	println("hereee")
 	toRegisterValidation.AddCookie(bucket2Cookie)
 	println("hereee2")
@@ -60,33 +73,39 @@ func main() {
 
 	captchaJSON := fmt.Sprintf(`{"x":"%s","y":"%s"}`, x, y)
 	toRegisterValidation.Header.Set("captchaAnswer", captchaJSON)
-
 	toRegisterValidation.Header.Set("email", "shayeganrood85@gmail.com")
 
 	toRegisterValidation.Header.Set("csrf-token", csrf_token)
 	client2 := &http.Client{}
 	toRegisterValidationResponse, _ := client2.Do(toRegisterValidation)
+	l("IM here noooow")
 	l("/register/validation POST status", toRegisterValidationResponse.Status)
 	registerValidationJWTCookie := toRegisterValidationResponse.Cookies()[0]
+	l("afteeer")
 
 	// /register/validation/jwt
 
+	respak2, _ := http.Get("http://127.0.0.1:1234/token")
+	bufjerk2, _ := io.ReadAll(respak2.Body)
+	respak2.Body.Close()
+
 	// GET
-	bucket3, _ := http.Get("http://127.0.0.1:1234/register/validation/jwt")
-	bucket3Cookie := bucket3.Cookies()[0]
+	bucket3, _ := http.NewRequest("GET", "http://127.0.0.1:1235/register/validation/jwt", nil)
+	client000 := &http.Client{}
+	bucket3.Header.Set("sideline", string(bufjerk2))
+	respak000, _ := client000.Do(bucket3)
+	bucket3Cookie := respak000.Cookies()[0]
 	vals = strings.Split(bucket3Cookie.Value, ",")
 	csrf_token = vals[1]
-	l("/register/validation/jwt GET status", bucket3.Status)
-
-	bucket3.Body.Close()
-
+	l("/register/validation/jwt GET status", respak000.Status)
+	l("So this seems passed")
 	// POST
-	toRegisterValidationJWT, _ := http.NewRequest("POST", "http://127.0.0.1:1234/register/validation/jwt", nil)
+	toRegisterValidationJWT, _ := http.NewRequest("POST", "http://127.0.0.1:1235/register/validation/jwt", nil)
 	toRegisterValidationJWT.AddCookie(bucket3Cookie)
 	toRegisterValidationJWT.AddCookie(registerValidationJWTCookie)
 	toRegisterValidationJWT.Header.Set("csrf-token", csrf_token)
-	toRegisterValidationJWT.Header.Set("username", "Shayegan8")
 	toRegisterValidationJWT.Header.Set("password", "Lego138$$(oqwe")
+	toRegisterValidationJWT.Header.Set("username", "Shayegan8")
 
 	client3 := &http.Client{}
 	toRegisterValidationJWTResponse, _ := client3.Do(toRegisterValidationJWT)
@@ -101,17 +120,23 @@ func main() {
 	fmt.Println("Enter verification code:")
 	fmt.Scan(&verificationCode)
 
+	respak3, _ := http.Get("http://127.0.0.1:1234/token")
+
+	bufjerk3, _ := io.ReadAll(respak3.Body)
+	respak3.Body.Close()
+
 	// GET
-	bucket4, _ := http.Get("http://127.0.0.1:1234/register/validation/submit")
-	bucket4Cookie := bucket4.Cookies()[0]
+	bucket4, _ := http.NewRequest("GET", "http://127.0.0.1:1235/register/validation/submit", nil)
+	client0000 := &http.Client{}
+	bucket4.Header.Set("sideline", string(bufjerk3))
+	respak0000, _ := client0000.Do(bucket4)
+	bucket4Cookie := respak0000.Cookies()[0]
 	vals = strings.Split(bucket4Cookie.Value, ",")
 	csrf_token = vals[1]
-	l("/register/validation/jwt GET status", bucket4.Status)
-
-	bucket4.Body.Close()
+	l("/register/validation/submit GET status", respak0000.Status)
 
 	// POST
-	toRegisterValidationSubmit, _ := http.NewRequest("POST", "http://127.0.0.1:1234/register/validation/submit", nil)
+	toRegisterValidationSubmit, _ := http.NewRequest("POST", "http://127.0.0.1:1235/register/validation/submit", nil)
 	toRegisterValidationSubmit.AddCookie(bucket4Cookie)
 	toRegisterValidationSubmit.AddCookie(registerValidationSubmitCookie)
 	toRegisterValidationSubmit.Header.Set("csrf-token", csrf_token)

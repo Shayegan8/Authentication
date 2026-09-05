@@ -7,6 +7,8 @@ posts:
 search:
 	go build -o search ./cmd/search
 replies:
-	go build -o search ./cmd/replies
+	go build -o replies ./cmd/replies
+buckets:
+	go build -o buckets ./cmd/bucket
 clean:
 	rm auth comments posts ./search

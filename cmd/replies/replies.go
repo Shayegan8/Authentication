@@ -4,6 +4,7 @@ import (
 	"crypto/x509"
 	_ "embed"
 	"encoding/json"
+	"encoding/pem"
 	"log"
 	"myblog/myblog"
 	"net/http"
@@ -63,22 +64,23 @@ func main() {
 		"csrf-token",
 	}), handlers.AllowedMethods([]string{"GET", "POST", "OPTIONS"}))(rrouter)
 
-	privateK, e := os.ReadFile("~/private_key")
+	privateK, e := os.ReadFile(os.Getenv("HOME") + "/private_key")
+	if e != nil {
+		log.Fatal(e)
+	}
+	pemjerked, _ := pem.Decode(privateK)
+	prk, e := x509.ParsePKCS1PrivateKey(pemjerked.Bytes)
 	if e != nil {
 		log.Fatal(e)
 	}
 
-	prk, e := x509.ParsePKCS1PrivateKey(privateK)
+	publicK, e := os.ReadFile(os.Getenv("HOME") + "/public_key")
 	if e != nil {
 		log.Fatal(e)
 	}
+	pemjerked2, _ := pem.Decode(publicK)
 
-	publicK, e := os.ReadFile("~/public_key")
-	if e != nil {
-		log.Fatal(e)
-	}
-
-	puk, e := x509.ParsePKCS1PublicKey(publicK)
+	puk, e := x509.ParsePKCS1PublicKey(pemjerked2.Bytes)
 	if e != nil {
 		log.Fatal(e)
 	}

@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS users(
     userid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email VARCHAR(255) UNIQUE, username VARCHAR(50) UNIQUE,
-    password BYTEA, refreshToken VARCHAR(64), timestamp NUMERIC DEFAULT EXTRACT(EPOCH FROM NOW())
+    password BYTEA, refreshToken BYTEA, timestamp NUMERIC DEFAULT EXTRACT(EPOCH FROM NOW())
 );
 
 CREATE INDEX email_idx ON users(email);
@@ -17,6 +17,7 @@ DECLARE
             -- Well in here i really dont see any reasoning why i should remove something with update from users, exception is fine
             RAISE EXCEPTION 'You don''t have this refresh token anymore, login again';
         END IF;
+        RETURN NEW;
     END;
 $$ LANGUAGE plpgsql;
 

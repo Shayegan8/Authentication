@@ -1,6 +1,6 @@
 module myblog
 
-go 1.25.7
+go 1.26.0
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -17,7 +17,7 @@ require (
 	github.com/wenlng/go-captcha-assets v1.0.7 // indirect
 	github.com/wenlng/go-captcha/v2 v2.0.5 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
-	golang.org/x/crypto v0.55.0 // indirect
+	golang.org/x/crypto v0.56.0 // indirect
 	golang.org/x/image v0.44.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
