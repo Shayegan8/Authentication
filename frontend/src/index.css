@@ -15,6 +15,7 @@
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
 
+  /*
   font: 18px/145% var(--sans);
   letter-spacing: 0.18px;
   color-scheme: light dark;
@@ -28,6 +29,13 @@
   @media (max-width: 1024px) {
     font-size: 16px;
   }
+    */
+}
+
+
+@font-face {
+  font-family: "fontak";
+  src: url('headerfont.ttf');
 }
 
 @media (prefers-color-scheme: dark) {
@@ -44,68 +52,74 @@
     --shadow:
       rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
   }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
-}
-
-#root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
 }
 
 body {
   margin: 0;
+  min-height: 100vh;
+  background: url('assground.jpg') no-repeat center / cover;
 }
 
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
+.container {
+  margin: 1%;
+  position: fixed;
+  left: 50%;
+  top: 5%;
+  transform: translate(-50%, -5%);
+  width: 70%;
+  height: 85%;
 }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
-p {
-  margin: 0;
-}
-
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
+.head {
+  width: 100%;
+  height: 100px;
+  font-family: "fontak";
   border-radius: 4px;
-  color: var(--text-h);
+  background-color: var(--bg);
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
 }
 
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+.head div:nth-child(1) {
+  padding: 5% 2%;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  gap: 5px;
+}
+
+.log {
+  color: rgb(216, 78, 47);
+  font-size: 32px;
+  user-select: none;
+}
+
+@keyframes blink {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0;
+  }
+}
+
+.searchbar {
+  user-select: none;
+  width: 500px;
+  height: 30px;
+  padding: 1% 0 0 2%;
+  border-radius: 5px;
+  font-size: 16px;
+  background-color: rgba(121, 167, 198, 0.214);
+  background-blend-mode: lighten;
+
+  &:focus {
+    outline: none;
+  }
 }
