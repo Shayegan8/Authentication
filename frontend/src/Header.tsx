@@ -9,19 +9,16 @@ export default function Header() {
         if (v) {
             if (v.textContent == "") {
                 v.textContent = "Search a post..."
-                v.style.color = "gray"
             }
 
             v.addEventListener("focusin", () => {
                 v.textContent = ""
-                v.style.color = "black"
             })
 
 
             v.addEventListener("focusout", () => {
                 if (v.textContent == "") {
                     v.textContent = "Search a post..."
-                    v.style.color = "gray"
                 }
             })
 
