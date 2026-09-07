@@ -1,11 +1,82 @@
+import { useEffect, useRef } from "react"
 import { useLocation, useParams } from "react-router-dom"
-
-
 
 export default function Middle() {
     const loc = useLocation()
     const params = useParams()
     let element: React.JSX.Element
+    const registerRef = useRef<HTMLDivElement>(null)
+    const passwordRef = useRef<HTMLDivElement>(null)
+    const userNameRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        const v = registerRef.current
+        const vPass = passwordRef.current
+        const vUser = userNameRef.current
+        if (v) {
+            if (v.textContent == "") {
+                v.textContent = "Email"
+            }
+
+            v.addEventListener("focusin", () => {
+                v.textContent = ""
+            })
+
+
+            v.addEventListener("focusout", () => {
+                if (v.textContent == "") {
+                    v.textContent = "Email"
+                }
+            })
+
+            v.addEventListener("keydown", (k) => {
+                if (k.key == "Enter")
+                    k.preventDefault()
+            })
+        }
+        if (vPass) {
+            if (vPass.textContent == "") {
+                vPass.textContent = "Password"
+            }
+
+            vPass.addEventListener("focusin", () => {
+                vPass.textContent = ""
+            })
+
+
+            vPass.addEventListener("focusout", () => {
+                if (vPass.textContent == "") {
+                    vPass.textContent = "Password"
+                }
+            })
+
+            vPass.addEventListener("keydown", (k) => {
+                if (k.key == "Enter")
+                    k.preventDefault()
+            })
+        }
+        if (vUser) {
+            if (vUser.textContent == "") {
+                vUser.textContent = "Username"
+            }
+
+            vUser.addEventListener("focusin", () => {
+                vUser.textContent = ""
+            })
+
+
+            vUser.addEventListener("focusout", () => {
+                if (vUser.textContent == "") {
+                    vUser.textContent = "Username"
+                }
+            })
+
+            vUser.addEventListener("keydown", (k) => {
+                if (k.key == "Enter")
+                    k.preventDefault()
+            })
+        }
+    })
     switch (loc.pathname) {
         case "/":
             element = <div className="middle">
@@ -32,6 +103,7 @@ export default function Middle() {
                             contentEditable="true"
                             data-placeholder="Email"
                             role="textbox"
+                            ref={registerRef}
                             suppressContentEditableWarning={true}
                         />
 
@@ -40,6 +112,7 @@ export default function Middle() {
                             contentEditable="true"
                             data-placeholder="Username"
                             role="textbox"
+                            ref={userNameRef}
                             suppressContentEditableWarning={true}
                         />
 
@@ -48,9 +121,9 @@ export default function Middle() {
                             contentEditable="true"
                             data-placeholder="Password"
                             role="textbox"
+                            ref={passwordRef}
                             suppressContentEditableWarning={true}
                         />
-
                     </div>
 
                     <div className="register-submit">
@@ -123,14 +196,16 @@ export default function Middle() {
                             contentEditable="true"
                             data-placeholder="Email"
                             role="textbox"
+                            ref={registerRef}
                             suppressContentEditableWarning={true}
                         />
-
+                        
                         <div
                             className="register-field"
                             contentEditable="true"
                             data-placeholder="Password"
                             role="textbox"
+                            ref={passwordRef}
                             suppressContentEditableWarning={true}
                         />
 
@@ -183,7 +258,7 @@ export default function Middle() {
                     </div>
 
                 </div>
-            </div>
+            </div >
             break
         case "/login/validation":
             break
