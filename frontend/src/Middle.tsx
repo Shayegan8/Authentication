@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react"
 import { useLocation, useParams } from "react-router-dom"
 
 export default function Middle() {
+
     const loc = useLocation()
     const params = useParams()
     let element: React.JSX.Element
@@ -175,11 +176,7 @@ export default function Middle() {
                 </div>
             </div>
             break
-        case "/register/validation":
-            break
         case "/register/validation/jwt":
-            break
-        case "/register/validation/submit":
             break
         case "/login":
             element = <div className="register">
@@ -199,7 +196,7 @@ export default function Middle() {
                             ref={registerRef}
                             suppressContentEditableWarning={true}
                         />
-                        
+
                         <div
                             className="register-field"
                             contentEditable="true"
@@ -260,11 +257,7 @@ export default function Middle() {
                 </div>
             </div >
             break
-        case "/login/validation":
-            break
         case "/login/validation/jwt":
-            break
-        case "/login/validation/submit":
             break
         case "/forgetPassword":
             break

@@ -121,7 +121,7 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 			HttpOnly: true,
 			Secure:   true,
 			SameSite: http.SameSiteStrictMode,
-			Path:     "/auth/" + endpoint,
+			Path:     "/" + endpoint,
 			MaxAge:   30,
 		})
 		l(token + "," + hexed + "," + sideline)
@@ -163,7 +163,7 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 			HttpOnly: true,
 			Secure:   true,
 			SameSite: http.SameSiteStrictMode,
-			Path:     "/auth/" + endpoint,
+			Path:     "/" + endpoint,
 			MaxAge:   30,
 		})
 		l(result + "," + hexed + "," + sideline)

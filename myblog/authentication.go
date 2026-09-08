@@ -512,7 +512,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 	dip := payload.Get("realip")
 	switch r.Method {
 	case "GET":
-		BucketHandlement("loginVS", "login/validation/submit", w, r)
+		BucketHandlement("loginVS", "login/validation/jwt", w, r)
 	case "POST":
 		verification := payload.Get("verification")
 		cookie, ero := r.Cookie("loginVS")
@@ -858,7 +858,7 @@ func LoginValidationJWT(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		Verify(marshaled["email"], "loginValidationSubmit", "login/validation/submit", "", password, w, r)
+		Verify(marshaled["email"], "loginValidationSubmit", "login/validation/jwt", "", password, w, r)
 	}
 }
 
@@ -866,7 +866,7 @@ func LoginValidation(w http.ResponseWriter, r *http.Request) {
 	payload := r.Header
 	switch r.Method {
 	case "GET":
-		BucketHandlement("loginV", "login/validation", w, r)
+		BucketHandlement("loginV", "login", w, r)
 	case "POST":
 		email := payload.Get("email")
 		captchaD := payload.Get("captchaAnswer")
@@ -1044,7 +1044,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		CaptchaGeneration(dip, "loginValidation", "login/validation", w, r)
+		CaptchaGeneration(dip, "loginValidation", "login", w, r)
 	}
 }
 
@@ -1052,7 +1052,7 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 	payload := r.Header
 	switch r.Method {
 	case "GET":
-		BucketHandlement("registerVS", "register/validation/submit", w, r)
+		BucketHandlement("registerVS", "register/validation/jwt", w, r)
 	case "POST":
 		cookie, ero := r.Cookie("registerVS")
 		userCSRF := payload.Get("csrf-token")
@@ -1412,7 +1412,7 @@ func RegisterValidationJWT(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		Verify(marshaled["email"], "registerValidationSubmit", "register/validation/submit", username, password, w, r)
+		Verify(marshaled["email"], "registerValidationSubmit", "register/validation/jwt", username, password, w, r)
 	}
 }
 
@@ -1421,7 +1421,7 @@ func RegisterValidation(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		log.Println("something")
-		BucketHandlement("registerV", "register/validation", w, r)
+		BucketHandlement("registerV", "register", w, r)
 	case "POST":
 		log.Println("somethong")
 		captchaD := payload.Get("captchaAnswer")
@@ -1627,7 +1627,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 		} else {
-			CaptchaGeneration(dip, "registerValidation", "register/validation", w, r)
+			CaptchaGeneration(dip, "registerValidation", "register", w, r)
 		}
 	}
 }
@@ -1680,9 +1680,10 @@ func CaptchaGeneration(dip string, name string, endpoint string, w http.Response
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
-		Path:     "/auth/" + endpoint, // Only sent to auth endpoints
+		Path:     "/" + endpoint, // Only sent to auth endpoints
 		MaxAge:   120,
 	})
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	w.Write([]byte(`{
 		"masterImage": "` + masterImage + `",
@@ -1742,7 +1743,7 @@ func CaptchaToken(captchaData map[string]string, name string, endpoint string, e
 			HttpOnly: true,
 			Secure:   true,
 			SameSite: http.SameSiteStrictMode,
-			Path:     "/auth/" + endpoint, // Only sent to auth endpoints
+			Path:     "/" + endpoint, // Only sent to auth endpoints
 			MaxAge:   120,
 		})
 		log.Println("Ok its accepted!")
@@ -1801,7 +1802,7 @@ func Verify(email string, name string, endpoint string, username string, passwor
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
-		Path:     "/auth/" + endpoint, // Only sent to auth endpoints
+		Path:     "/" + endpoint, // Only sent to auth endpoints
 		MaxAge:   120,
 	})
 	w.WriteHeader(http.StatusAccepted)
