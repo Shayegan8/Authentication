@@ -313,9 +313,9 @@ export default function Middle() {
                     <button
                         onClick={async () => {
                             if (verificationRefs.current) {
-                                const inputi = verificationRefs.current[0]!.innerText +
-                                    verificationRefs.current[1]!.innerText + verificationRefs.current[2]!.innerText +
-                                    verificationRefs.current[3]!.innerText + verificationRefs.current[4]!.innerText
+                                const inputi = verificationRefs.current[0]!.value +
+                                    verificationRefs.current[1]!.value + verificationRefs.current[2]!.value +
+                                    verificationRefs.current[3]!.value + verificationRefs.current[4]!.value
                                 const res = await registerValidationSubmit(inputi)
                                 if (res)
                                     console.log("Success")

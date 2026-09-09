@@ -513,7 +513,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 	dip := payload.Get("realip")
 	switch r.Method {
 	case "GET":
-		BucketHandlement("loginVS", "login/validation/jwt", w, r)
+		BucketHandlement("loginVS", "login/validation", w, r)
 	case "POST":
 		verification := payload.Get("verification")
 		cookie, ero := r.Cookie("loginVS")
@@ -719,7 +719,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 				Name:     "userData",
 				Value:    value,
 				HttpOnly: true,
-				Secure:   false,
+				Secure:   true,
 				SameSite: http.SameSiteStrictMode,
 				Path:     "/",
 				MaxAge:   0,
@@ -846,7 +846,7 @@ func LoginValidationJWT(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		Verify(marshaled["email"], "loginValidationSubmit", "login/validation/jwt", "", marshaled["email"], w, r)
+		Verify(marshaled["email"], "loginValidationSubmit", "login/validation", "", marshaled["email"], w, r)
 	}
 }
 
@@ -1054,7 +1054,7 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 	payload := r.Header
 	switch r.Method {
 	case "GET":
-		BucketHandlement("registerVS", "register/validation/jwt", w, r)
+		BucketHandlement("registerVS", "register/validation", w, r)
 	case "POST":
 		cookie, ero := r.Cookie("registerVS")
 		userCSRF := payload.Get("csrf-token")
@@ -1270,7 +1270,7 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 				Name:     "userData",
 				Value:    value,
 				HttpOnly: true,
-				Secure:   false,
+				Secure:   true,
 				SameSite: http.SameSiteStrictMode,
 				Path:     "/",
 				MaxAge:   0,
@@ -1409,7 +1409,7 @@ func RegisterValidationJWT(w http.ResponseWriter, r *http.Request) {
 		}
 
 		l("Ok its for verify functions seems like")
-		Verify(marshaled["email"], "registerValidationSubmit", "register/validation/jwt", marshaled["username"], marshaled["password"], w, r)
+		Verify(marshaled["email"], "registerValidationSubmit", "register/validation", marshaled["username"], marshaled["password"], w, r)
 	}
 }
 
@@ -1700,7 +1700,7 @@ func CaptchaGeneration(dip string, name string, endpoint string, w http.Response
 			"answer": ` + answer + `
 		}`)),
 		HttpOnly: true,
-		Secure:   false,
+		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
 		Path:     "/" + endpoint, // Only sent to auth endpoints
 		MaxAge:   60,
@@ -1771,7 +1771,7 @@ func CaptchaToken(captchaData map[string]string, name string, endpoint string, e
 				"signature": "` + base64.StdEncoding.EncodeToString(signature) + `"
 			}`)),
 			HttpOnly: true,
-			Secure:   false,
+			Secure:   true,
 			SameSite: http.SameSiteStrictMode,
 			Path:     "/" + endpoint,
 			MaxAge:   120,
@@ -1831,7 +1831,7 @@ func Verify(email string, name string, endpoint string, username string, passwor
 				"signature": "` + base64.StdEncoding.EncodeToString(signature) + `"
 			}`)),
 		HttpOnly: true,
-		Secure:   false,
+		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
 		Path:     "/" + endpoint,
 		MaxAge:   120,
