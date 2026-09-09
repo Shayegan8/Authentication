@@ -13,7 +13,7 @@ createRoot(rootDOMElement).render(
         <Route path="/" element={<App />} />
         <Route path="/register" element={<App />} />
         <Route path="/register/validation" element={<App />} />
-        <Route path="/register/validation/jwt/:redirected" element={<App />} />
+        <Route path="/register/validation/jwt" element={<App />} />
         <Route path="/register/validation/submit" element={<App />} />
         <Route path="/login" element={<App />} />
         <Route path="/login/validation" element={<App />} />

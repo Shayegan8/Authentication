@@ -63,5 +63,5 @@ export async function registerValidationSubmit(vcode) { // we are still in /regi
         credentials: "include"
     })
 
-    return registerFetch.status
+    return registerFetch.status != 202
 }

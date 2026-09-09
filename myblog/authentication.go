@@ -1066,7 +1066,6 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 		}
 		if ero != nil {
 			l("vs registerVS")
-
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -1693,6 +1692,7 @@ func CaptchaGeneration(dip string, name string, endpoint string, w http.Response
 	l(strishit)
 	pipe.Set(r.Context(), "captcha"+dip+buffTokHex, strishit, 1*time.Minute)
 	pipe.Exec(r.Context())
+
 	http.SetCookie(w, &http.Cookie{
 		Name: name,
 		Value: base64.StdEncoding.EncodeToString([]byte(`{
@@ -1705,6 +1705,7 @@ func CaptchaGeneration(dip string, name string, endpoint string, w http.Response
 		Path:     "/" + endpoint, // Only sent to auth endpoints
 		MaxAge:   60,
 	})
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	w.Write([]byte(`{
@@ -1772,7 +1773,7 @@ func CaptchaToken(captchaData map[string]string, name string, endpoint string, e
 			HttpOnly: true,
 			Secure:   false,
 			SameSite: http.SameSiteStrictMode,
-			Path:     "/" + endpoint, // Only sent to auth endpoints
+			Path:     "/" + endpoint,
 			MaxAge:   120,
 		})
 		log.Println("Ok its accepted!")
@@ -1832,7 +1833,7 @@ func Verify(email string, name string, endpoint string, username string, passwor
 		HttpOnly: true,
 		Secure:   false,
 		SameSite: http.SameSiteStrictMode,
-		Path:     "/" + endpoint, // Only sent to auth endpoints
+		Path:     "/" + endpoint,
 		MaxAge:   120,
 	})
 	w.WriteHeader(http.StatusAccepted)

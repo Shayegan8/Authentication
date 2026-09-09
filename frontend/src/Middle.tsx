@@ -2,36 +2,89 @@ import { useContext, useEffect, useRef, useState } from "react"
 import { useLocation, useNavigate, useParams } from "react-router-dom"
 import { RootElementContext } from "./RootElementContext"
 import Captcha from "./Captcha"
-import { register, registerValidation, registerValidationJWT } from "./api"
+import { register, registerValidation, registerValidationJWT, registerValidationSubmit } from "./api"
 
 export default function Middle() {
     const navigate = useNavigate()
     const validationFucker = async (email: string, username: string, password: string, x: number) => {
         const check = await registerValidation(email, username, password, x)
         const res = await registerValidationJWT()
-        if (captchaBackground.current)
-            rooti!.removeChild(captchaBackground.current)
-        if (captchaMenu.current)
-            rooti!.removeChild(captchaMenu.current)
+        rooti!.removeChild(captchaBackground.current!)
+        rooti!.removeChild(captchaMenu.current!)
         if (res)
             await navigate("/errorFuck")
         else
-            if (!check) // if it wasnt 202
-                await navigate("/register/validation/jwt/true")
-            else
+            if (!check) { // if it wasnt 202 
+                setVerification(true)
+                console.log("I SET THIS MOTHER FUCKER")
+                await navigate("/register/validation/jwt")
+            } else
                 await navigate("/error")
     }
     const loc = useLocation()
     const params = useParams()
-    const verificationSubmitRef = useRef<HTMLButtonElement>(null)
+    const [verification, setVerification] = useState(false)
     const registerRef = useRef<HTMLDivElement>(null)
     const passwordRef = useRef<HTMLDivElement>(null)
     const userNameRef = useRef<HTMLDivElement>(null)
+    const verificationRefs = useRef<Array<HTMLInputElement | null>>([])
     const submitRegister = useRef<HTMLDivElement>(null)
     let Elementa: React.JSX.Element
     const captchaBackground = useRef<HTMLDivElement>(null)
     const captchaMenu = useRef<HTMLDivElement>(null)
     const rooti = useContext(RootElementContext)
+    const handleVerificationInput = (
+        e: React.ChangeEvent<HTMLInputElement>,
+        index: number
+    ) => {
+        const value = e.target.value
+
+        // Keep only numbers
+        const digit = value.replace(/\D/g, "").slice(-1)
+
+        e.target.value = digit
+
+        if (digit && index < 4) {
+            verificationRefs.current[index + 1]?.focus()
+        }
+    }
+
+    const handleVerificationKeyDown = (
+        e: React.KeyboardEvent<HTMLInputElement>,
+        index: number
+    ) => {
+        if (e.key === "Backspace")
+            if (!e.currentTarget.value && index > 0)
+                verificationRefs.current[index - 1]?.focus()
+
+        if (!/^[0-9]$/.test(e.key) && e.key !== "Backspace" && e.key !== "Delete" &&
+            e.key !== "ArrowLeft" &&
+            e.key !== "ArrowRight" &&
+            e.key !== "Tab")
+            e.preventDefault()
+    }
+
+    const handleVerificationPaste = (
+        e: React.ClipboardEvent<HTMLInputElement>
+    ) => {
+        e.preventDefault()
+
+        const pasted = e.clipboardData
+            .getData("text")
+            .replace(/\D/g, "")
+            .slice(0, 5)
+
+        pasted.split("").forEach((digit, index) => {
+            const input = verificationRefs.current[index]
+
+            if (input)
+                input.value = digit
+        })
+
+        const nextIndex = Math.min(pasted.length, 4)
+
+        verificationRefs.current[nextIndex]?.focus()
+    }
     const [captchaData, setCaptchaData] = useState<{
         masterImage: string
         titleImage: string,
@@ -229,37 +282,51 @@ export default function Middle() {
                 </div>
             </div>
             break
-        case "/register/validation/jwt/" + params.redirected:
-            if (params.redirected != "true") {
-                console.log("Ok we do it")
-                registerValidationJWT().then(() => {
-                    if (captchaBackground.current)
-                        rooti!.removeChild(captchaBackground.current)
-                    if (captchaMenu.current)
-                        rooti!.removeChild(captchaMenu.current)
-                    Elementa = <div className="verification">
-                        <div>
-                            We've sent you a code to your mail
-                        </div>
-
-                        <div className="verification-code">
-                            <input type="text" maxLength={1} inputMode="numeric" />
-                            <input type="text" maxLength={1} inputMode="numeric" />
-                            <input type="text" maxLength={1} inputMode="numeric" />
-                            <input type="text" maxLength={1} inputMode="numeric" />
-                            <input type="text" maxLength={1} inputMode="numeric" />
-                        </div>
-
-                        <button
-                            ref={verificationSubmitRef}
-                            className="verification-submit">
-                            Submit
-                        </button>
+        case "/register/validation/jwt":
+            if (verification)
+                Elementa = <div className="verification">
+                    <div>
+                        We've sent you a code to your mail
                     </div>
-                }).catch(() => {
-                    navigate("/errorFuck")
-                })
-            }
+
+                    <div className="verification-code">
+                        {Array.from({ length: 5 }, (_, index) => (
+                            <input
+                                key={index}
+                                ref={(element) => {
+                                    verificationRefs.current[index] = element
+                                }}
+                                type="text"
+                                maxLength={1}
+                                inputMode="numeric"
+                                onChange={(e) =>
+                                    handleVerificationInput(e, index)
+                                }
+                                onKeyDown={(e) =>
+                                    handleVerificationKeyDown(e, index)
+                                }
+                                onPaste={handleVerificationPaste}
+                            />
+                        ))}
+                    </div>
+
+                    <button
+                        onClick={async () => {
+                            if (verificationRefs.current) {
+                                const inputi = verificationRefs.current[0]!.innerText +
+                                    verificationRefs.current[1]!.innerText + verificationRefs.current[2]!.innerText +
+                                    verificationRefs.current[3]!.innerText + verificationRefs.current[4]!.innerText
+                                const res = await registerValidationSubmit(inputi)
+                                if (res)
+                                    console.log("Success")
+                                else
+                                    console.log("Failure")
+                            }
+                        }}
+                        className="verification-submit">
+                        Submit
+                    </button>
+                </div>
             break
         case "/login":
             Elementa = <div className="register">
