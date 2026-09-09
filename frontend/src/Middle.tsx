@@ -1,15 +1,43 @@
-import { useEffect, useRef } from "react"
-import { useLocation, useParams } from "react-router-dom"
+import { useContext, useEffect, useRef, useState } from "react"
+import { useLocation, useNavigate, useParams } from "react-router-dom"
+import { RootElementContext } from "./RootElementContext"
+import Captcha from "./Captcha"
+import { register, registerValidation, registerValidationJWT } from "./api"
 
 export default function Middle() {
-
+    const navigate = useNavigate()
+    const validationFucker = async (email: string, username: string, password: string, x: number) => {
+        const check = await registerValidation(email, username, password, x)
+        const res = await registerValidationJWT()
+        if (captchaBackground.current)
+            rooti!.removeChild(captchaBackground.current)
+        if (captchaMenu.current)
+            rooti!.removeChild(captchaMenu.current)
+        if (res)
+            await navigate("/errorFuck")
+        else
+            if (!check) // if it wasnt 202
+                await navigate("/register/validation/jwt/true")
+            else
+                await navigate("/error")
+    }
     const loc = useLocation()
     const params = useParams()
-    let element: React.JSX.Element
+    const verificationSubmitRef = useRef<HTMLButtonElement>(null)
     const registerRef = useRef<HTMLDivElement>(null)
     const passwordRef = useRef<HTMLDivElement>(null)
     const userNameRef = useRef<HTMLDivElement>(null)
-
+    const submitRegister = useRef<HTMLDivElement>(null)
+    let Elementa: React.JSX.Element
+    const captchaBackground = useRef<HTMLDivElement>(null)
+    const captchaMenu = useRef<HTMLDivElement>(null)
+    const rooti = useContext(RootElementContext)
+    const [captchaData, setCaptchaData] = useState<{
+        masterImage: string
+        titleImage: string,
+        dx: number,
+        dy: number
+    } | null>(null)
     useEffect(() => {
         const v = registerRef.current
         const vPass = passwordRef.current
@@ -18,7 +46,6 @@ export default function Middle() {
             if (v.textContent == "") {
                 v.textContent = "Email"
             }
-
             v.addEventListener("focusin", () => {
                 v.textContent = ""
             })
@@ -46,9 +73,8 @@ export default function Middle() {
 
 
             vPass.addEventListener("focusout", () => {
-                if (vPass.textContent == "") {
+                if (vPass.textContent == "")
                     vPass.textContent = "Password"
-                }
             })
 
             vPass.addEventListener("keydown", (k) => {
@@ -57,9 +83,8 @@ export default function Middle() {
             })
         }
         if (vUser) {
-            if (vUser.textContent == "") {
+            if (vUser.textContent == "")
                 vUser.textContent = "Username"
-            }
 
             vUser.addEventListener("focusin", () => {
                 vUser.textContent = ""
@@ -77,10 +102,38 @@ export default function Middle() {
                     k.preventDefault()
             })
         }
+
+        const query = submitRegister.current
+        const backiRooti = captchaBackground.current
+        const itsMenu = captchaMenu.current
+        query?.addEventListener('click', async () => {
+
+            const captcha = await register()
+
+            if (captcha.status != 202)
+                return
+
+            setCaptchaData({
+                masterImage: captcha.masterImage,
+                titleImage: captcha.titleImage,
+                dx: captcha.dx,
+                dy: captcha.dy
+            })
+
+            rooti?.appendChild(backiRooti!)
+            rooti?.appendChild(itsMenu!)
+            backiRooti!.style.display = "block"
+            itsMenu!.style.display = "block"
+
+        })
+        backiRooti?.addEventListener('click', () => {
+            backiRooti!.style.display = "none"
+            itsMenu!.style.display = "none"
+        })
     })
     switch (loc.pathname) {
         case "/":
-            element = <div className="middle">
+            Elementa = <div className="middle">
                 <div>
 
                 </div>
@@ -90,7 +143,7 @@ export default function Middle() {
             </div>
             break
         case "/register":
-            element = <div className="register">
+            Elementa = <div className="register">
                 <div className="register-form-card">
 
                     <div className="register-form-title">
@@ -127,7 +180,7 @@ export default function Middle() {
                         />
                     </div>
 
-                    <div className="register-submit">
+                    <div className="register-submit" ref={submitRegister}>
                         Create account
                     </div>
 
@@ -176,10 +229,40 @@ export default function Middle() {
                 </div>
             </div>
             break
-        case "/register/validation/jwt":
+        case "/register/validation/jwt/" + params.redirected:
+            if (params.redirected != "true") {
+                console.log("Ok we do it")
+                registerValidationJWT().then(() => {
+                    if (captchaBackground.current)
+                        rooti!.removeChild(captchaBackground.current)
+                    if (captchaMenu.current)
+                        rooti!.removeChild(captchaMenu.current)
+                    Elementa = <div className="verification">
+                        <div>
+                            We've sent you a code to your mail
+                        </div>
+
+                        <div className="verification-code">
+                            <input type="text" maxLength={1} inputMode="numeric" />
+                            <input type="text" maxLength={1} inputMode="numeric" />
+                            <input type="text" maxLength={1} inputMode="numeric" />
+                            <input type="text" maxLength={1} inputMode="numeric" />
+                            <input type="text" maxLength={1} inputMode="numeric" />
+                        </div>
+
+                        <button
+                            ref={verificationSubmitRef}
+                            className="verification-submit">
+                            Submit
+                        </button>
+                    </div>
+                }).catch(() => {
+                    navigate("/errorFuck")
+                })
+            }
             break
         case "/login":
-            element = <div className="register">
+            Elementa = <div className="register">
                 <div className="register-form-card">
 
                     <div className="register-form-title">
@@ -274,9 +357,27 @@ export default function Middle() {
         case "/dashboard":
             break
         default:
-            element = <div>404 - Page Not Found</div>
+            Elementa = <div>404 - Page Not Found</div>
             break
     }
 
-    return element!
+    return (<>
+        <div className="captchauation" ref={captchaBackground}>
+        </div>
+        <div className="menuitself" ref={captchaMenu}>
+            {captchaData && (
+                <Captcha
+                    masterImage={captchaData.masterImage}
+                    titleImage={captchaData.titleImage}
+                    dx={captchaData.dx}
+                    dy={captchaData.dy}
+                    onSubmit={validationFucker}
+                    registerRef={registerRef}
+                    userNameRef={userNameRef}
+                    passwordRef={passwordRef}
+                />
+            )}
+        </div>
+        {Elementa!}
+    </>)
 }

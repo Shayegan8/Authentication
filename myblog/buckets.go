@@ -115,11 +115,12 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 		randomShit := make([]byte, 16)
 		rand.Read(randomShit)
 		hexed := hex.EncodeToString(randomShit)
+
 		http.SetCookie(w, &http.Cookie{
 			Name:     name,
 			Value:    token + "," + hexed + "," + sideline,
 			HttpOnly: true,
-			Secure:   true,
+			Secure:   false,
 			SameSite: http.SameSiteStrictMode,
 			Path:     "/" + endpoint,
 			MaxAge:   30,
@@ -161,7 +162,7 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 			Name:     name,
 			Value:    result + "," + hexed + "," + sideline,
 			HttpOnly: true,
-			Secure:   true,
+			Secure:   false,
 			SameSite: http.SameSiteStrictMode,
 			Path:     "/" + endpoint,
 			MaxAge:   30,

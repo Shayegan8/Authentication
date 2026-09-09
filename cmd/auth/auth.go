@@ -42,9 +42,7 @@ func SecurityHandlers(router http.Handler) http.Handler {
 }
 
 func Init() slide.Captcha {
-	builder := slide.NewBuilder(
-		slide.WithEnableGraphVerticalRandom(true),
-	)
+	builder := slide.NewBuilder()
 
 	imgs, _ := imagesv2.GetImages()
 
@@ -91,7 +89,7 @@ func main() {
 
 	rrouter := handlers.LoggingHandler(os.Stdout, router)
 	rrouter = SecurityHandlers(rrouter)
-	rrrouter := handlers.CORS(handlers.AllowedOrigins([]string{"http://127.0.0.1:5132"}), handlers.AllowCredentials(), handlers.AllowedHeaders([]string{
+	rrrouter := handlers.CORS(handlers.AllowedOrigins([]string{"http://127.0.0.1:5173"}), handlers.AllowCredentials(), handlers.AllowedHeaders([]string{
 		"signature",
 		"answer",
 		"token",
