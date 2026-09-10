@@ -101,8 +101,7 @@ func main() {
 		"username",
 		"password",
 		"email",
-		"csrf-token",
-	}), handlers.AllowedMethods([]string{"GET", "POST", "OPTIONS"}))(rrouter)
+	}), handlers.AllowedMethods([]string{"POST", "OPTIONS"}))(rrouter)
 
 	privateK, e := os.ReadFile(os.Getenv("HOME") + "/private_key")
 	if e != nil {

@@ -843,7 +843,7 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		fmt.Println("IM here")
-		refreshToken := make([]byte, 32)
+		refreshToken := make([]byte, 300)
 		rand.Read(refreshToken)
 		refreshTokenHex := hex.EncodeToString(refreshToken)
 		fmt.Println("IM here tooo")
@@ -854,7 +854,7 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			l("no next")
 			// give token and write success
-			value := `{\"userid\": \"` + userid + `\",\"email\": \"` + email + `\",\"refreshToken\": \"` + refreshTokenHex + `\"}`
+			value := `{"userid": "` + userid + `","email": "` + email + `","refreshToken": "` + refreshTokenHex + `"}`
 
 			http.SetCookie(w, &http.Cookie{
 				Name:     "userData",
@@ -1240,7 +1240,6 @@ func CaptchaToken(captchaData map[string]string, name string, endpoint string, e
 }
 
 func Verify(email string, name string, endpoint string, username string, password string, w http.ResponseWriter, r *http.Request) {
-	// if the user was already in our storage means its login other
 	vcode := rnd.IntN(90000) + 10000
 	log.Println("The answer for verify is", vcode)
 	go func() {

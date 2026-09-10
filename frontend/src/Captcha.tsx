@@ -5,11 +5,11 @@ type CaptchaProps = {
     titleImage: string
     dx: number
     dy: number
-    onSubmit: (email: string, username: string, password: string, x: number) => void
+    onSubmit: (email: string, password: string, x: number, username?: string) => void
     registerRef: React.RefObject<HTMLDivElement | null>
-    userNameRef: React.RefObject<HTMLDivElement | null>
+    userNameRef?: React.RefObject<HTMLDivElement | null>
     passwordRef: React.RefObject<HTMLDivElement | null>
-
+    loc: string
 }
 
 export default function Captcha({
@@ -20,7 +20,8 @@ export default function Captcha({
     onSubmit,
     registerRef,
     userNameRef,
-    passwordRef
+    passwordRef,
+    loc
 }: CaptchaProps) {
 
     const boxRef = useRef<HTMLDivElement>(null)
@@ -194,12 +195,19 @@ export default function Captcha({
 
                     const finalX = Math.round((dx + sliderX) / 10) * 10
                     console.log("finalX our answer: " + finalX)
-                    onSubmit(
-                        registerRef.current!.innerText,
-                        userNameRef.current!.innerText,
-                        passwordRef.current!.innerText,
-                        finalX
-                    )
+                    if (loc.includes("register"))
+                        onSubmit(
+                            registerRef.current!.innerText,
+                            passwordRef.current!.innerText,
+                            finalX,
+                            userNameRef!.current!.innerText,
+                        )
+                    else if (loc.includes("login"))
+                        onSubmit(
+                            registerRef.current!.innerText,
+                            passwordRef.current!.innerText,
+                            finalX
+                        )
                 }}
             >
                 Verify

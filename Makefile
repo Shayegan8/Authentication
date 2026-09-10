@@ -8,7 +8,5 @@ search:
 	go build -o search ./cmd/search
 replies:
 	go build -o replies ./cmd/replies
-tokens:
-	go build -o tokens ./cmd/tokens
 clean:
 	rm auth comments posts ./search

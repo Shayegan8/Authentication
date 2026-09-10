@@ -2,13 +2,20 @@ import { useContext, useEffect, useRef, useState } from "react"
 import { useLocation, useNavigate, useParams } from "react-router-dom"
 import { RootElementContext } from "./RootElementContext"
 import Captcha from "./Captcha"
-import { register, registerValidation, registerValidationJWT, registerValidationSubmit } from "./api"
+import { login, loginValidation, loginValidationJWT, loginValidationSubmit, register, registerValidation, registerValidationJWT, registerValidationSubmit } from "./api"
 
 export default function Middle() {
     const navigate = useNavigate()
-    const validationFucker = async (email: string, username: string, password: string, x: number) => {
-        const check = await registerValidation(email, username, password, x)
-        const res = await registerValidationJWT()
+    const validationFucker = async (email: string, password: string, x: number, username?: string) => {
+        let check
+        let res
+        if (username) {
+            check = await registerValidation(email, username, password, x)
+            res = await registerValidationJWT()
+        } else {
+            check = await loginValidation(email, password, x)
+            res = await loginValidationJWT()
+        }
         rooti!.removeChild(captchaBackground.current!)
         rooti!.removeChild(captchaMenu.current!)
         if (res)
@@ -17,7 +24,10 @@ export default function Middle() {
             if (!check) { // if it wasnt 202 
                 setVerification(true)
                 console.log("I SET THIS MOTHER FUCKER")
-                await navigate("/register/validation/jwt")
+                if (username)
+                    await navigate("/register/validation/jwt")
+                else
+                    await navigate("/login/validation/jwt")
             } else
                 await navigate("/error")
     }
@@ -160,24 +170,28 @@ export default function Middle() {
         const backiRooti = captchaBackground.current
         const itsMenu = captchaMenu.current
         query?.addEventListener('click', async () => {
+            let captcha
+            if (loc.pathname == "/register")
+                captcha = await register()
+            else if (loc.pathname == "/login")
+                captcha = await login()
 
-            const captcha = await register()
+            if (captcha) {
+                if (captcha.status != 202)
+                    return
 
-            if (captcha.status != 202)
-                return
+                setCaptchaData({
+                    masterImage: captcha.masterImage,
+                    titleImage: captcha.titleImage,
+                    dx: captcha.dx,
+                    dy: captcha.dy
+                })
 
-            setCaptchaData({
-                masterImage: captcha.masterImage,
-                titleImage: captcha.titleImage,
-                dx: captcha.dx,
-                dy: captcha.dy
-            })
-
-            rooti?.appendChild(backiRooti!)
-            rooti?.appendChild(itsMenu!)
-            backiRooti!.style.display = "block"
-            itsMenu!.style.display = "block"
-
+                rooti?.appendChild(backiRooti!)
+                rooti?.appendChild(itsMenu!)
+                backiRooti!.style.display = "block"
+                itsMenu!.style.display = "block"
+            }
         })
         backiRooti?.addEventListener('click', () => {
             backiRooti!.style.display = "none"
@@ -317,7 +331,7 @@ export default function Middle() {
                                     verificationRefs.current[1]!.value + verificationRefs.current[2]!.value +
                                     verificationRefs.current[3]!.value + verificationRefs.current[4]!.value
                                 const res = await registerValidationSubmit(inputi)
-                                if (res)
+                                if (!res)
                                     console.log("Success")
                                 else
                                     console.log("Failure")
@@ -355,11 +369,10 @@ export default function Middle() {
                             ref={passwordRef}
                             suppressContentEditableWarning={true}
                         />
-
                     </div>
 
-                    <div className="register-submit">
-                        Login to your account
+                    <div className="register-submit" ref={submitRegister}>
+                        Login
                     </div>
 
                     <div className="register-divider">
@@ -405,9 +418,53 @@ export default function Middle() {
                     </div>
 
                 </div>
-            </div >
+            </div>
             break
         case "/login/validation/jwt":
+            if (verification)
+                Elementa = <div className="verification">
+                    <div>
+                        We've sent you a code to your mail
+                    </div>
+
+                    <div className="verification-code">
+                        {Array.from({ length: 5 }, (_, index) => (
+                            <input
+                                key={index}
+                                ref={(element) => {
+                                    verificationRefs.current[index] = element
+                                }}
+                                type="text"
+                                maxLength={1}
+                                inputMode="numeric"
+                                onChange={(e) =>
+                                    handleVerificationInput(e, index)
+                                }
+                                onKeyDown={(e) =>
+                                    handleVerificationKeyDown(e, index)
+                                }
+                                onPaste={handleVerificationPaste}
+                            />
+                        ))}
+                    </div>
+
+                    <button
+                        onClick={async () => {
+                            if (verificationRefs.current) {
+                                const inputi = verificationRefs.current[0]!.value +
+                                    verificationRefs.current[1]!.value + verificationRefs.current[2]!.value +
+                                    verificationRefs.current[3]!.value + verificationRefs.current[4]!.value
+                                const res = await loginValidationSubmit(inputi)
+                                if (!res)
+                                    console.log("Success")
+                                else
+                                    console.log("Failure")
+                            }
+                        }}
+                        className="verification-submit">
+                        Submit
+                    </button>
+                </div>
             break
         case "/forgetPassword":
             break
@@ -442,6 +499,7 @@ export default function Middle() {
                     registerRef={registerRef}
                     userNameRef={userNameRef}
                     passwordRef={passwordRef}
+                    loc={loc.pathname}
                 />
             )}
         </div>
