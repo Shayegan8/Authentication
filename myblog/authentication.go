@@ -31,87 +31,18 @@ var Captcha slide.Captcha
 func ForgetPassword(w http.ResponseWriter, r *http.Request) { // dosen't require refresh token
 	payload := r.Header
 	switch r.Method {
-	case "GET":
-		BucketHandlement("forget", "forgetPassword", w, r)
 	case "POST":
 		dip := payload.Get("realip")
-		cookie, ero := r.Cookie("forget")
-		userCSRF := payload.Get("csrf-token")
-		if userCSRF == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		if ero != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		parts := strings.Split(cookie.Value, ",")
-		token := parts[0]
-		csrf := parts[1]
-		sideline := parts[2]
-		if token == "" || csrf == "" || sideline == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		if userCSRF != csrf {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		removed, err := Redis_client.LRem(r.Context(), "forget"+dip+sideline, 1, token).Result()
-
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-		} else if removed == 0 {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-		} else {
-			CaptchaGeneration(dip, "forgetPasswordValidation", "forgetPassword/validation", w, r)
-		}
+		CaptchaGeneration(dip, "forgetPasswordValidation", "forgetPassword/validation", w, r)
 	}
 }
 
 func ForgetPasswordValidation(w http.ResponseWriter, r *http.Request) {
 	payload := r.Header
-	dip := r.Header.Get("realip")
 	switch r.Method {
-	case "GET":
-		BucketHandlement("forgetValidation", "forgetPassword/validation", w, r)
 	case "POST":
+		dip := r.Header.Get("realip")
 		email := payload.Get("email")
-		cookie, ero := r.Cookie("forgetValidation")
-		userCSRF := payload.Get("csrf-token")
-		if userCSRF == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		if ero != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		parts := strings.Split(cookie.Value, ",")
-		token := parts[0]
-		csrf := parts[1]
-		sideline := parts[2]
-		if token == "" || csrf == "" || sideline == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		if userCSRF != csrf {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
 		cookie, erroj := r.Cookie("forgetPasswordValidation")
 		decodedCookie, ear := base64.StdEncoding.DecodeString(cookie.Value)
 
@@ -121,7 +52,7 @@ func ForgetPasswordValidation(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if email == "" || token == "" {
+		if email == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -138,18 +69,6 @@ func ForgetPasswordValidation(w http.ResponseWriter, r *http.Request) {
 		sig := decodedCookieMap["signature"]
 		answer := decodedCookieMap["answer"]
 		if sig == "" || answer == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		removed, erro := Redis_client.LRem(r.Context(), "forgetValidation"+dip+sideline, 1, token).Result()
-
-		if erro != nil { // dont care if its server error or client bad request
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-			return
-		} else if removed == 0 {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -206,60 +125,12 @@ func ForgetPasswordValidation(w http.ResponseWriter, r *http.Request) {
 }
 
 func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
-	payload := r.Header
 	switch r.Method {
-	case "GET":
-		BucketHandlement("forgetValidationJWT", "forgetPassword/validation/jwt", w, r)
 	case "POST":
-		dip := payload.Get("realip")
-		cookie, ero := r.Cookie("forgetValidationJWT")
-		userCSRF := payload.Get("csrf-token")
-		if userCSRF == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		if ero != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		parts := strings.Split(cookie.Value, ",")
-		token := parts[0]
-		csrf := parts[1]
-		sideline := parts[2]
-		if token == "" || csrf == "" || sideline == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		if userCSRF != csrf {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
 		cookie, erroj := r.Cookie("forgetPasswordValidationJWT")
 		decodedCookie, ear := base64.StdEncoding.DecodeString(cookie.Value)
 
 		if erroj != nil || ear != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		if token == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		removed, err := Redis_client.LRem(r.Context(), "forgetValidationJWT"+dip+sideline, 1, token).Result()
-
-		if err != nil { // dont care if its server error or client bad request
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-			return
-		} else if removed == 0 {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -320,7 +191,7 @@ func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
 
 		if rows.Next() { // this means if the user with this details actually exist
 			rows.Close()
-			newHashedLink := make([]byte, 15)
+			newHashedLink := make([]byte, 60)
 			rand.Read(newHashedLink)
 
 			pipe := Redis_client.Pipeline()
@@ -356,85 +227,11 @@ func ForgetPasswordChangeLink(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	payload := r.Header
 	switch r.Method {
-	case "GET":
-		BucketHandlement("forgetLink", "forgetPassword/", w, r)
 	case "POST":
 		password := payload.Get("password")
-
-		dip := payload.Get("realip")
-		cookie, ero := r.Cookie("forgetLink")
-		userCSRF := payload.Get("csrf-token")
-		if userCSRF == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		if ero != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		parts := strings.Split(cookie.Value, ",")
-		token := parts[0]
-		csrf := parts[1]
-		sideline := parts[2]
-		if token == "" || csrf == "" || sideline == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		if userCSRF != csrf {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		if token == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		removed, err := Redis_client.LRem(r.Context(), "forgetLink"+dip+sideline, 1, token).Result()
-
-		if err != nil { // dont care if its server error or client bad request
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-			return
-		} else if removed == 0 {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		answerCookie, erria := r.Cookie("forgetPasswordChangeLink")
-		if erria != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		decoded, eroz := base64.StdEncoding.DecodeString(answerCookie.Value)
-		if eroz != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		var decodedMap map[string]string
-		erriq := json.Unmarshal(decoded, &decodedMap)
-		if erriq != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		sig := decodedMap["signature"]
-		answer := decodedMap["answer"]
-		if sig == "" || answer == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		if password == "" {
+		token := vars["token"]
+		email := vars["email"]
+		if password == "" || token == "" || email == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -452,55 +249,36 @@ func ForgetPasswordChangeLink(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		summedJwt := sha256.Sum256([]byte(answer))
-		decodedSig, erri := base64.StdEncoding.DecodeString(sig)
-		if erri != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		verErr := rsa.VerifyPKCS1v15(PublicKey, crypto.SHA256, summedJwt[:], decodedSig)
-		if verErr != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		var decodedAnswer map[string]string
-		eoo := json.Unmarshal([]byte(answer), &decodedAnswer)
-		if eoo != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		converted, _ := strconv.Atoi(decodedAnswer["time"])
-
-		if (time.Now().Unix() - int64(converted)) > 120 {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
 			return
 		}
-
-		oo, er := Postgres_client.Exec(r.Context(), "UPDATE users SET password=$1 WHERE email=$2", hashedPassword, decodedAnswer["email"])
-		if er != nil {
+		ea := Redis_client.Del(r.Context(), token)
+		if ea.Err() != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
-		} else if oo.RowsAffected() == 0 { // this can be impossible but anyway
+			return
+		}
+		res, erri := ea.Result()
+		if erri != nil {
 			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Server error"))
+			return
+		} else if res == 0 {
+			w.WriteHeader(http.StatusBadGateway)
 			w.Write([]byte("Bad request"))
+			return
 		} else {
-			ea := Redis_client.Del(r.Context(), vars["token"])
-			if ea != nil {
+			oo, er := Postgres_client.Exec(r.Context(), "UPDATE users SET password=$1 WHERE email=$2", hashedPassword, email)
+			if er != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte("Server error"))
+				return
+			} else if oo.RowsAffected() == 0 {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("Bad request"))
 				return
 			}
 			w.WriteHeader(http.StatusAccepted)
@@ -510,52 +288,9 @@ func ForgetPasswordChangeLink(w http.ResponseWriter, r *http.Request) {
 
 func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 	payload := r.Header
-	dip := payload.Get("realip")
 	switch r.Method {
-	case "GET":
-		BucketHandlement("loginVS", "login/validation", w, r)
 	case "POST":
 		verification := payload.Get("verification")
-		cookie, ero := r.Cookie("loginVS")
-		userCSRF := payload.Get("csrf-token")
-		if userCSRF == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		if ero != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		parts := strings.Split(cookie.Value, ",")
-		token := parts[0]
-		csrf := parts[1]
-		sideline := parts[2]
-		if token == "" || csrf == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		if userCSRF != csrf {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		removed, err := Redis_client.LRem(r.Context(), "loginVS"+dip+sideline, 1, token).Result()
-
-		if err != nil { // dont care if its server error or client bad request
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-			return
-		} else if removed == 0 {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
 		answerCookie, erria := r.Cookie("loginValidationSubmit")
 		if erria != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -607,7 +342,17 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		converted, _ := strconv.Atoi(marshaled["time"])
+		timee := marshaled["time"]
+		password := marshaled["password"]
+		email := marshaled["email"]
+		tok := marshaled["tok"]
+		if timee == "" || password == "" || email == "" || tok == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		converted, _ := strconv.Atoi(timee)
 
 		if (time.Now().Unix() - int64(converted)) > 120 {
 			w.WriteHeader(http.StatusBadRequest)
@@ -615,7 +360,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		count, era := Redis_client.Incr(r.Context(), "counter"+marshaled["email"]).Result()
+		count, era := Redis_client.Incr(r.Context(), "counter"+tok+email).Result()
 		if era != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
@@ -623,12 +368,12 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if count == 1 {
-			Redis_client.Expire(r.Context(), "counter"+marshaled["email"], 2*time.Minute)
+			Redis_client.Expire(r.Context(), "counter"+tok+email, 2*time.Minute)
 		}
 
 		if vercode, erro := strconv.Atoi(verification); erro == nil {
 			// in this case user received the code and its on the header now
-			vc, err := Redis_client.Get(r.Context(), marshaled["email"]).Result()
+			vc, err := Redis_client.Get(r.Context(), tok+email).Result()
 			verificationCode, err1 := strconv.Atoi(vc)
 			if err1 != nil {
 				w.WriteHeader(http.StatusInternalServerError)
@@ -646,8 +391,8 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if verificationCode == vercode {
-				_, errr := Redis_client.Del(r.Context(), marshaled["email"]).Result()
-				_, era := Redis_client.Del(r.Context(), "counter"+marshaled["email"]).Result()
+				_, errr := Redis_client.Del(r.Context(), tok+email).Result()
+				_, era := Redis_client.Del(r.Context(), "counter"+email).Result()
 				if errr != nil || era != nil {
 					w.WriteHeader(http.StatusInternalServerError)
 					w.Write([]byte("Server error")) // i dont think this happens, anyway
@@ -655,8 +400,8 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 				}
 			} else {
 				if count == 10 {
-					_, errr := Redis_client.Del(r.Context(), marshaled["email"]).Result()
-					_, era := Redis_client.Del(r.Context(), "counter"+marshaled["email"]).Result()
+					_, errr := Redis_client.Del(r.Context(), tok+email).Result()
+					_, era := Redis_client.Del(r.Context(), "counter"+tok+email).Result()
 					if errr != nil || era != nil {
 						w.WriteHeader(http.StatusInternalServerError)
 						w.Write([]byte("Server error")) // i dont think this happens, anyway
@@ -675,7 +420,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		l("OK im here in login")
-		rows, errio := Postgres_client.Query(r.Context(), "SELECT refreshToken, userid, password FROM users WHERE email=$1", marshaled["email"])
+		rows, errio := Postgres_client.Query(r.Context(), "SELECT refreshToken, userid, password FROM users WHERE email=$1", email)
 		if errio != nil {
 			l("server cheror?", errio)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -687,7 +432,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			var refreshTokenHash []byte
 			var userid string
 			var hashedPassword []byte
-			refreshToken := make([]byte, 32)
+			refreshToken := make([]byte, 300)
 			rand.Read(refreshToken)
 			refreshTokenHex := hex.EncodeToString(refreshToken)
 
@@ -699,7 +444,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			if bcrypt.CompareHashAndPassword(hashedPassword, []byte(marshaled["password"])) != nil {
+			if bcrypt.CompareHashAndPassword(hashedPassword, []byte(password)) != nil {
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write([]byte("Bad request"))
 				return
@@ -713,7 +458,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			value := `{\"userid\": \"` + userid + `\",\"email\": \"` + marshaled["email"] + `\",\"refreshToken\": \"` + refreshTokenHex + `\"}`
+			value := `{\"userid\": \"` + userid + `\",\"email\": \"` + email + `\",\"refreshToken\": \"` + refreshTokenHex + `\"}`
 
 			http.SetCookie(w, &http.Cookie{
 				Name:     "userData",
@@ -736,57 +481,8 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 }
 
 func LoginValidationJWT(w http.ResponseWriter, r *http.Request) {
-	payload := r.Header
-	dip := payload.Get("realip")
 	switch r.Method {
-	case "GET":
-		BucketHandlement("loginVJ", "login/validation/jwt", w, r)
 	case "POST":
-		cookie, ero := r.Cookie("loginVJ")
-		userCSRF := payload.Get("csrf-token")
-		if userCSRF == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		if ero != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		parts := strings.Split(cookie.Value, ",")
-		token := parts[0]
-		csrf := parts[1]
-		sideline := parts[2]
-		if token == "" || csrf == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		if userCSRF != csrf {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		if token == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		removed, err := Redis_client.LRem(r.Context(), "loginVJ"+dip+sideline, 1, token).Result()
-
-		if err != nil { // dont care if its server error or client bad request
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-			return
-		} else if removed == 0 {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
 		answerCookie, erria := r.Cookie("loginValidationJWT")
 		if erria != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -838,7 +534,16 @@ func LoginValidationJWT(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		converted, _ := strconv.Atoi(marshaled["time"])
+		timee := marshaled["time"]
+		password := marshaled["password"]
+
+		if timee == "" || password == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		converted, _ := strconv.Atoi(timee)
 
 		if (time.Now().Unix() - int64(converted)) > 120 {
 			w.WriteHeader(http.StatusBadRequest)
@@ -846,33 +551,18 @@ func LoginValidationJWT(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		Verify(marshaled["email"], "loginValidationSubmit", "login/validation", "", marshaled["email"], w, r)
+		Verify(marshaled["email"], "loginValidationSubmit", "login/validation", "", password, w, r)
 	}
 }
 
 func LoginValidation(w http.ResponseWriter, r *http.Request) {
 	payload := r.Header
 	switch r.Method {
-	case "GET":
-		BucketHandlement("loginV", "login", w, r)
 	case "POST":
 		email := payload.Get("email")
 		password := payload.Get("password")
 		captchaD := payload.Get("captchaAnswer")
 		dip := payload.Get("realip")
-		cookie, ero := r.Cookie("loginV")
-		userCSRF := payload.Get("csrf-token")
-		if userCSRF == "" || email == "" || password == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		if ero != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
 		if strings.ContainsAny(password, "@.\"'") {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
@@ -885,34 +575,7 @@ func LoginValidation(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		parts := strings.Split(cookie.Value, ",")
-		token := parts[0]
-		csrf := parts[1]
-		sideline := parts[2]
-		if token == "" || csrf == "" || sideline == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		if userCSRF != csrf {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		if email == "" || captchaD == "" || token == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		removed, erro := Redis_client.LRem(r.Context(), "loginV"+dip+sideline, 1, token).Result()
-
-		if erro != nil { // dont care if its server error or client bad request
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-			return
-		} else if removed == 0 {
+		if email == "" || captchaD == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -974,8 +637,17 @@ func LoginValidation(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-		converted, _ := strconv.Atoi(marshaled["time"])
 
+		timee := marshaled["time"]
+		token := marshaled["token"]
+
+		if timee == "" || token == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		converted, _ := strconv.Atoi(timee)
 		if (time.Now().Unix() - int64(converted)) > 120 {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
@@ -989,63 +661,14 @@ func LoginValidation(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-		CaptchaToken(captchaData, "loginValidationJWT", "login/validation/jwt", email, "", password, marshaled["token"], w, dip, r)
+		CaptchaToken(captchaData, "loginValidationJWT", "login/validation/jwt", email, "", password, token, w, dip, r)
 	}
 }
 
 func Login(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
-	case "GET":
-		l("thiiiis")
-		BucketHandlement("login", "login", w, r)
 	case "POST":
-		payload := r.Header
 		dip := r.Header.Get("realip")
-		cookie, ero := r.Cookie("login")
-		userCSRF := payload.Get("csrf-token")
-		if userCSRF == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		if ero != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		parts := strings.Split(cookie.Value, ",")
-		token := parts[0]
-		csrf := parts[1]
-		sideline := parts[2]
-		if token == "" || csrf == "" || sideline == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		if userCSRF != csrf {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		if token == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		removed, err := Redis_client.LRem(r.Context(), "login"+dip+sideline, 1, token).Result()
-
-		if err != nil { // dont care if its server error or client bad request
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-			return
-		} else if removed == 0 {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
 		CaptchaGeneration(dip, "loginValidation", "login", w, r)
 	}
 }
@@ -1053,58 +676,13 @@ func Login(w http.ResponseWriter, r *http.Request) {
 func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 	payload := r.Header
 	switch r.Method {
-	case "GET":
-		BucketHandlement("registerVS", "register/validation", w, r)
 	case "POST":
-		cookie, ero := r.Cookie("registerVS")
-		userCSRF := payload.Get("csrf-token")
-		if userCSRF == "" {
-			l("vs userCSRF")
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		if ero != nil {
-			l("vs registerVS")
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		parts := strings.Split(cookie.Value, ",")
-		token := parts[0]
-		csrf := parts[1]
-		sideline := parts[2]
-		if token == "" || csrf == "" || sideline == "" {
-			l("vs token or shit")
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		if userCSRF != csrf {
-			l("vs they arent same")
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
 		verification := payload.Get("verification")
-		dip := payload.Get("realip")
-
-		removed, err := Redis_client.LRem(r.Context(), "registerVS"+dip+sideline, 1, token).Result()
-
-		if err != nil { // dont care if its server error or client bad request
-			l("vs redis err server ;-;")
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-			return
-		} else if removed == 0 {
-			l("vs redis err server")
-
+		if verification == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
 		}
-
 		answerCookie, erria := r.Cookie("registerValidationSubmit")
 		if erria != nil {
 			l("registerValidationSubmit")
@@ -1164,7 +742,19 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		converted, _ := strconv.Atoi(marshaled["time"])
+		timee := marshaled["time"]
+		email := marshaled["email"]
+		tok := marshaled["tok"]
+		username := marshaled["username"]
+		password := marshaled["password"]
+
+		if timee == "" || email == "" || tok == "" || username == "" || password == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		converted, _ := strconv.Atoi(timee)
 
 		if (time.Now().Unix() - int64(converted)) > 120 {
 			l("time")
@@ -1173,7 +763,7 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		count, era := Redis_client.Incr(r.Context(), "counter"+marshaled["email"]).Result()
+		count, era := Redis_client.Incr(r.Context(), "counter"+tok+email).Result()
 		if era != nil {
 			l("counter issue")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -1182,12 +772,12 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if count == 1 {
-			Redis_client.Expire(r.Context(), "counter"+marshaled["email"], 2*time.Minute)
+			Redis_client.Expire(r.Context(), "counter"+tok+email, 2*time.Minute)
 		}
 
 		if vercode, erro := strconv.Atoi(verification); erro == nil {
 			// in this case user received the code and its on the header now
-			vc, err := Redis_client.Get(r.Context(), marshaled["email"]).Result()
+			vc, err := Redis_client.Get(r.Context(), tok+email).Result()
 			verificationCode, err1 := strconv.Atoi(vc)
 			if err1 != nil {
 				l("vercode error")
@@ -1209,8 +799,8 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			}
 			if verificationCode == vercode {
 				l("fucking same")
-				_, errr := Redis_client.Del(r.Context(), marshaled["email"]).Result()
-				_, era := Redis_client.Del(r.Context(), "counter"+marshaled["email"]).Result()
+				_, errr := Redis_client.Del(r.Context(), tok+email).Result()
+				_, era := Redis_client.Del(r.Context(), "counter"+tok+email).Result()
 				if errr != nil || era != nil {
 					l("fucking eeeerorrr")
 					w.WriteHeader(http.StatusInternalServerError)
@@ -1220,8 +810,8 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			} else {
 				if count == 10 {
 					l("goz jerk")
-					_, errr := Redis_client.Del(r.Context(), marshaled["email"]).Result()
-					_, era := Redis_client.Del(r.Context(), "counter"+marshaled["email"]).Result()
+					_, errr := Redis_client.Del(r.Context(), tok+email).Result()
+					_, era := Redis_client.Del(r.Context(), "counter"+tok+email).Result()
 					if errr != nil || era != nil {
 						l("fuckin errorrr in c 10")
 						w.WriteHeader(http.StatusInternalServerError)
@@ -1245,7 +835,7 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		hashedPassword, erri := bcrypt.GenerateFromPassword([]byte(marshaled["password"]), bcrypt.DefaultCost)
+		hashedPassword, erri := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 		if erri != nil {
 			l("server shitty pussy")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -1258,13 +848,13 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 		refreshTokenHex := hex.EncodeToString(refreshToken)
 		fmt.Println("IM here tooo")
 		var userid string
-		err = Postgres_client.QueryRow(r.Context(),
+		err := Postgres_client.QueryRow(r.Context(),
 			"INSERT INTO users(email, username, password, refreshToken)"+
-				" VALUES ($1, $2, $3, $4) RETURNING userid", marshaled["email"], marshaled["username"], hashedPassword, refreshToken).Scan(&userid)
+				" VALUES ($1, $2, $3, $4) RETURNING userid", email, username, hashedPassword, refreshToken).Scan(&userid)
 		if err == nil {
 			l("no next")
 			// give token and write success
-			value := `{\"userid\": \"` + userid + `\",\"email\": \"` + marshaled["email"] + `\",\"refreshToken\": \"` + refreshTokenHex + `\"}`
+			value := `{\"userid\": \"` + userid + `\",\"email\": \"` + email + `\",\"refreshToken\": \"` + refreshTokenHex + `\"}`
 
 			http.SetCookie(w, &http.Cookie{
 				Name:     "userData",
@@ -1289,58 +879,9 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 }
 
 func RegisterValidationJWT(w http.ResponseWriter, r *http.Request) {
-	payload := r.Header
 	switch r.Method {
-	case "GET":
-		BucketHandlement("registerVJ", "register/validation/jwt", w, r)
 	case "POST":
 		l("So here we are")
-		cookie, ero := r.Cookie("registerVJ")
-		userCSRF := payload.Get("csrf-token")
-		if userCSRF == "" {
-			l("fuck sex?")
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		if ero != nil {
-			l("dal jerk?")
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		parts := strings.Split(cookie.Value, ",")
-		token := parts[0]
-		csrf := parts[1]
-		sideline := parts[2]
-		if token == "" || csrf == "" || sideline == "" {
-			l("bamjirk?")
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		if userCSRF != csrf {
-			l("shamshish?")
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		dip := payload.Get("realip")
-
-		removed, err := Redis_client.LRem(r.Context(), "registerVJ"+dip+sideline, 1, token).Result()
-
-		if err != nil { // dont care if its server error or client bad request
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-			return
-		} else if removed == 0 {
-			l("dolchips?")
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
 		answerCookie, erria := r.Cookie("registerValidationJWT")
 		if erria != nil {
 			l("shashkir?")
@@ -1416,9 +957,6 @@ func RegisterValidationJWT(w http.ResponseWriter, r *http.Request) {
 func RegisterValidation(w http.ResponseWriter, r *http.Request) {
 	payload := r.Header
 	switch r.Method {
-	case "GET":
-		log.Println("something")
-		BucketHandlement("registerV", "register", w, r)
 	case "POST":
 		log.Println("somethong for registerValidation need to be happen right?")
 		captchaD := payload.Get("captchaAnswer")
@@ -1427,19 +965,11 @@ func RegisterValidation(w http.ResponseWriter, r *http.Request) {
 		username := payload.Get("username")
 		password := payload.Get("password")
 		dip := payload.Get("realip")
-		cookie, ero := r.Cookie("registerV")
-		userCSRF := payload.Get("csrf-token")
-		log.Println("Data we received from user,", email, cookie.Value, userCSRF)
+		log.Println("Data we received from user,", email)
 		log.Println("CaptchaD:")
 		log.Println(captchaD)
-		if userCSRF == "" || username == "" || password == "" || email == "" {
+		if username == "" || password == "" || email == "" || captchaD == "" {
 			l("userCSRF")
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		if ero != nil {
-			l("registerV")
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -1452,44 +982,6 @@ func RegisterValidation(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if len(password) < 8 || !strings.ContainsAny(password, "ABCDEFGHIKJLMNOPQRSTUVWXYZ") || !strings.ContainsAny(password, "abcdefghikjlmnopqrstuvwxyz") || !strings.ContainsAny(password, "0123456789") || !strings.ContainsAny(password, "!#$%^&*()-_+") {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		parts := strings.Split(cookie.Value, ",")
-		token := parts[0]
-		csrf := parts[1]
-		sideline := parts[2]
-		if token == "" || csrf == "" || sideline == "" {
-			l("token or csrf")
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		if userCSRF != csrf {
-			l("userCSRF csrf")
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		if captchaD == "" || email == "" || token == "" {
-			l("This dudes")
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		removed, erro := Redis_client.LRem(r.Context(), "registerV"+dip+sideline, 1, token).Result()
-
-		if erro != nil { // dont care if its server error or client bad request
-			l("removed problem server ;-;")
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-			return
-		} else if removed == 0 {
-			l("removed problem ;-;")
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -1562,7 +1054,17 @@ func RegisterValidation(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-		converted, _ := strconv.Atoi(marshaled["time"])
+
+		timee := marshaled["time"]
+		token := marshaled["token"]
+
+		if timee == "" || token == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		converted, _ := strconv.Atoi(timee)
 
 		if (time.Now().Unix() - int64(converted)) > 120 {
 			l("time problem")
@@ -1579,70 +1081,15 @@ func RegisterValidation(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-		CaptchaToken(captchaData, "registerValidationJWT", "register/validation/jwt", email, username, password, marshaled["token"], w, dip, r)
+		CaptchaToken(captchaData, "registerValidationJWT", "register/validation/jwt", email, username, password, token, w, dip, r)
 	}
 }
 
 func Register(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
-	case "GET":
-		BucketHandlement("register", "register", w, r)
 	case "POST":
-		payload := r.Header
-		cookie, ero := r.Cookie("register")
-		log.Println("Ok we are before this")
-		log.Println("fucking cookie register", cookie.Value)
-		userCSRF := payload.Get("csrf-token")
-		log.Println("fucking userCSRF register", userCSRF)
-
-		if userCSRF == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		if ero != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		parts := strings.Split(cookie.Value, ",")
-		token := parts[0]
-		csrf := parts[1]
-		sideline := parts[2]
-		if token == "" || csrf == "" || sideline == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		if userCSRF != csrf {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		log.Println("Token seems obtained")
-		if token == "" {
-			log.Println("What the fuck?")
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
 		dip := r.Header.Get("realip")
-		log.Println("Ip of that guy", dip)
-
-		removed, err := Redis_client.LRem(r.Context(), "register"+dip+sideline, 1, token).Result()
-
-		if err != nil { // dont care if its server error or client bad request
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-		} else if removed == 0 {
-			log.Println("Removed problem")
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-		} else {
-			CaptchaGeneration(dip, "registerValidation", "register", w, r)
-		}
+		CaptchaGeneration(dip, "registerValidation", "register", w, r)
 	}
 }
 
@@ -1665,7 +1112,7 @@ func CaptchaGeneration(dip string, name string, endpoint string, w http.Response
 
 	masterImage, _ := captData.GetMasterImage().ToBase64()
 	tileImage, _ := captData.GetTileImage().ToBase64()
-	buffTok := make([]byte, 32)
+	buffTok := make([]byte, 60)
 	rand.Read(buffTok)
 	buffTokHex := hex.EncodeToString(buffTok)
 	answer := `"{\"token\": \"` + buffTokHex + `\",\"time\": \"` + fmt.Sprintf("%d", time.Now().Unix()) + `\"}"`
@@ -1808,10 +1255,10 @@ func Verify(email string, name string, endpoint string, username string, passwor
 			log.Println("Problem with smtp server:", err)
 		}
 	}()
-	Redis_client.Set(r.Context(), email, vcode, 3*time.Minute)
-	buff := make([]byte, 10)
+	buff := make([]byte, 32)
 	rand.Read(buff)
 	tok := hex.EncodeToString(buff)
+	Redis_client.Set(r.Context(), tok+email, vcode, 3*time.Minute)
 	//jwt
 	var jsonAnswer string
 	var jsonAnswerShould string

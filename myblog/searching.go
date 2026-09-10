@@ -4,15 +4,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/jackc/pgx/v5"
 )
 
 func Search(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
-	case "GET":
-		BucketHandlement("search", "search", w, r)
 	case "POST":
 		payload := r.Header
 		page := payload.Get("page")
@@ -22,47 +19,6 @@ func Search(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-		dip := payload.Get("realip")
-		cookie, ero := r.Cookie("search")
-		userCSRF := payload.Get("csrf-token")
-		if userCSRF == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		if ero != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		parts := strings.Split(cookie.Value, ",")
-		token := parts[0]
-		csrf := parts[1]
-		sideline := parts[2]
-		if token == "" || csrf == "" || sideline == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		if userCSRF != csrf {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		removed, erro := Redis_client.LRem(r.Context(), "search"+dip+sideline, 1, token).Result()
-
-		if erro != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-			return
-		} else if removed == 0 {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
 		var rows pgx.Rows
 		var e error
 		if page == "" {

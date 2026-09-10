@@ -626,7 +626,7 @@ body {
 
   margin-top: 24px;
   width: 10%;
-  max-width: 300px;
+  min-width: 100px;
   height: 48px;
 
   border: 1px solid var(--accent-green);

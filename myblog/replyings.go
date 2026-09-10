@@ -4,20 +4,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/jackc/pgx/v5"
 )
 
 func Reply(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
-	case "GET":
-		BucketHandlement("reply", "reply", w, r)
 	case "POST":
 		payload := r.Header
-		dip := payload.Get("realip")
-		cookie, ero := r.Cookie("reply")
-		userCSRF := payload.Get("csrf-token")
 		body := payload.Get("body")
 		postid := payload.Get("postid")
 		commentid := payload.Get("commentid")
@@ -28,35 +22,7 @@ func Reply(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if userCSRF == "" || postid == "" || body == "" || commentid == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		parts := strings.Split(cookie.Value, ",")
-		token := parts[0]
-		csrf := parts[1]
-		sideline := parts[2]
-		if token == "" || csrf == "" || sideline == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		if userCSRF != csrf {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		removed, ero := Redis_client.LRem(r.Context(), "reply"+dip+sideline, 1, token).Result()
-
-		if ero != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-			return
-		} else if removed == 0 {
+		if postid == "" || body == "" || commentid == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -96,51 +62,10 @@ type ReplyData struct {
 
 func GetReplies(w http.ResponseWriter, r *http.Request) { // GetPosts dosent require refresh tokens
 	switch r.Method {
-	case "GET":
-		BucketHandlement("getReplies", "getReplies", w, r)
 	case "POST":
 		payload := r.Header
 		page := payload.Get("page")
 		if page == "1" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		dip := payload.Get("realip")
-		cookie, ero := r.Cookie("getReplies")
-		userCSRF := payload.Get("csrf-token")
-		if userCSRF == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		if ero != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		parts := strings.Split(cookie.Value, ",")
-		token := parts[0]
-		csrf := parts[1]
-		sideline := parts[2]
-		if token == "" || csrf == "" || sideline == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		if userCSRF != csrf {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-		removed, erro := Redis_client.LRem(r.Context(), "getReplies"+dip+sideline, 1, token).Result()
-
-		if erro != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-			return
-		} else if removed == 0 {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return

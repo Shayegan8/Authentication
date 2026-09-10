@@ -1,20 +1,10 @@
 package myblog
 
-import (
-	"crypto"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/sha256"
-	"encoding/hex"
-	"fmt"
-	"log"
-	rnd "math/rand/v2"
-	"net/http"
-	"strconv"
-	"strings"
-	"time"
-)
+import "log"
 
+var l = log.Println
+
+/*
 type BucketData struct {
 	tokens    []string
 	timestamp int64
@@ -172,3 +162,4 @@ func BucketHandlement(name string, endpoint string, w http.ResponseWriter, r *ht
 		w.Write([]byte(hexed))
 	}
 }
+*/
