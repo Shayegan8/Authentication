@@ -42,6 +42,7 @@ export default function Middle() {
     let Elementa: React.JSX.Element
     const captchaBackground = useRef<HTMLDivElement>(null)
     const captchaMenu = useRef<HTMLDivElement>(null)
+    const slideshit = useRef<HTMLDivElement>(null)
     const rooti = useContext(RootElementContext)
     const handleVerificationInput = (
         e: React.ChangeEvent<HTMLInputElement>,
@@ -49,7 +50,6 @@ export default function Middle() {
     ) => {
         const value = e.target.value
 
-        // Keep only numbers
         const digit = value.replace(/\D/g, "").slice(-1)
 
         e.target.value = digit
@@ -106,18 +106,8 @@ export default function Middle() {
         const vPass = passwordRef.current
         const vUser = userNameRef.current
         if (v) {
-            if (v.textContent == "") {
-                v.textContent = "Email"
-            }
             v.addEventListener("focusin", () => {
                 v.textContent = ""
-            })
-
-
-            v.addEventListener("focusout", () => {
-                if (v.textContent == "") {
-                    v.textContent = "Email"
-                }
             })
 
             v.addEventListener("keydown", (k) => {
@@ -126,18 +116,8 @@ export default function Middle() {
             })
         }
         if (vPass) {
-            if (vPass.textContent == "") {
-                vPass.textContent = "Password"
-            }
-
             vPass.addEventListener("focusin", () => {
                 vPass.textContent = ""
-            })
-
-
-            vPass.addEventListener("focusout", () => {
-                if (vPass.textContent == "")
-                    vPass.textContent = "Password"
             })
 
             vPass.addEventListener("keydown", (k) => {
@@ -146,18 +126,8 @@ export default function Middle() {
             })
         }
         if (vUser) {
-            if (vUser.textContent == "")
-                vUser.textContent = "Username"
-
             vUser.addEventListener("focusin", () => {
                 vUser.textContent = ""
-            })
-
-
-            vUser.addEventListener("focusout", () => {
-                if (vUser.textContent == "") {
-                    vUser.textContent = "Username"
-                }
             })
 
             vUser.addEventListener("keydown", (k) => {
@@ -177,8 +147,25 @@ export default function Middle() {
                 captcha = await login()
 
             if (captcha) {
-                if (captcha.status != 202)
-                    return
+                if (captcha.status != 202) {
+                    const slidechips = slideshit.current
+
+                    if (slidechips) {
+                        slidechips.innerText = "Bad request"
+                        navigate("/")
+
+                        slidechips.style.display = "block"
+
+                        slidechips.classList.remove("registered-show")
+                        void slidechips.offsetWidth
+                        slidechips.classList.add("registered-show")
+
+                        setTimeout(() => {
+                            slidechips.style.display = "none"
+                        }, 3000)
+                    }
+
+                }
 
                 setCaptchaData({
                     masterImage: captcha.masterImage,
@@ -197,7 +184,7 @@ export default function Middle() {
             backiRooti!.style.display = "none"
             itsMenu!.style.display = "none"
         })
-    })
+    }, )
     switch (loc.pathname) {
         case "/":
             Elementa = <div className="middle">
@@ -331,10 +318,29 @@ export default function Middle() {
                                     verificationRefs.current[1]!.value + verificationRefs.current[2]!.value +
                                     verificationRefs.current[3]!.value + verificationRefs.current[4]!.value
                                 const res = await registerValidationSubmit(inputi)
-                                if (!res)
-                                    console.log("Success")
-                                else
-                                    console.log("Failure")
+                                const slidechips = slideshit.current
+
+                                if (slidechips) {
+                                    if (!res) {
+                                        slidechips.innerText = "Successfully registered!"
+                                        navigate("/")
+                                        console.log("Gambis")
+                                    } else {
+                                        slidechips.innerText = "Registeration failed, redirecting..."
+                                        navigate("/register")
+                                        console.log("Failure")
+                                    }
+
+                                    slidechips.style.display = "block"
+
+                                    slidechips.classList.remove("registered-show")
+                                    void slidechips.offsetWidth
+                                    slidechips.classList.add("registered-show")
+
+                                    setTimeout(() => {
+                                        slidechips.style.display = "none"
+                                    }, 3000)
+                                }
                             }
                         }}
                         className="verification-submit">
@@ -502,6 +508,9 @@ export default function Middle() {
                     loc={loc.pathname}
                 />
             )}
+        </div>
+        <div className="registered" ref={slideshit}>
+
         </div>
         {Elementa!}
     </>)
