@@ -9,47 +9,6 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func Post(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "POST":
-		payload := r.Header
-		title := payload.Get("title")
-		info := payload.Get("info")
-		body := payload.Get("body")
-		userData, ero := r.Cookie("userData")
-		if ero != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		var userDataMap map[string]string
-		ero = json.Unmarshal([]byte(userData.Value), &userDataMap)
-		if ero != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		userid := userDataMap["userid"]
-
-		if userid == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		_, ero = Postgres_client.Exec(r.Context(), "CALL insert_post($1, $2, $3, $4)", userid, title, info, body)
-		if ero != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
-		w.WriteHeader(http.StatusAccepted)
-	}
-}
-
 type PostData struct {
 	Title string `json:"title"`
 	Id    string `json:"postid"`
@@ -66,7 +25,6 @@ func GetPost(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
-
 		rows, e := Postgres_client.Query(r.Context(), "SELECT title, info, body FROM posts where postid=$1", postid)
 		if e != nil {
 			w.WriteHeader(http.StatusBadRequest)

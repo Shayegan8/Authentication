@@ -769,17 +769,6 @@ body {
   font-size: 15px;
 }
 
-@media (max-width: 1484px) {
-  .container {
-    width: 100%;
-    height: 100%;
-
-    border: none;
-    border-radius: 0;
-  }
-
-}
-
 .registered {
   display: none;
 
@@ -825,6 +814,453 @@ body {
   background-color: var(--accent-light);
 
   transform-origin: left;
+}
+
+.dashboard {
+  width: 100%;
+  height: 700px;
+
+  display: flex;
+  justify-content: center;
+
+  padding: 50px 20px 80px;
+
+  box-sizing: border-box;
+}
+
+
+.dashboard-card {
+  width: min(760px, 100%);
+  background: var(--bg);
+
+  border: 1px solid var(--border);
+
+  border-radius: 16px;
+
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.25);
+}
+
+.dashboard-header {
+  padding: 32px 36px;
+
+  border-bottom: 1px solid var(--border);
+}
+
+
+.dashboard-title {
+  color: var(--text-h);
+
+  font-size: 28px;
+  font-weight: 800;
+
+  letter-spacing: -0.5px;
+}
+
+
+.dashboard-subtitle {
+  margin-top: 7px;
+
+  color: var(--text);
+
+  font-size: 14px;
+}
+
+.dashboard-section {
+  padding: 30px 36px;
+
+  border-bottom: 1px solid var(--border);
+}
+
+
+.dashboard-section:last-child {
+  border-bottom: none;
+}
+
+
+.dashboard-section-header {
+  margin-bottom: 24px;
+}
+
+
+.dashboard-section-header h2 {
+  margin: 0;
+
+  color: var(--text-h);
+
+  font-size: 17px;
+  font-weight: 700;
+}
+
+
+.dashboard-section-header p {
+  margin: 6px 0 0;
+
+  color: var(--text);
+
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.dashboard-profile {
+  display: flex;
+
+  align-items: flex-start;
+
+  gap: 28px;
+}
+
+
+.dashboard-avatar {
+  width: 82px;
+  height: 82px;
+
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background:
+    linear-gradient(135deg,
+      rgba(255, 101, 72, 0.25),
+      rgba(255, 101, 72, 0.05));
+
+  border: 1px solid rgba(255, 101, 72, 0.35);
+
+  color: var(--accent-light);
+
+  font-size: 30px;
+  font-weight: 800;
+
+  user-select: none;
+}
+
+
+.dashboard-profile-info {
+  flex: 1;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 18px;
+}
+
+
+.dashboard-field {
+  display: flex;
+  flex-direction: column;
+
+  gap: 8px;
+}
+
+
+.dashboard-field label {
+  color: var(--text);
+
+  font-size: 12px;
+  font-weight: 600;
+}
+
+
+.dashboard-input {
+  min-height: 42px;
+
+  display: flex;
+  align-items: center;
+
+  padding: 0 13px;
+
+  box-sizing: border-box;
+
+  border-radius: 8px;
+
+  background: rgba(255, 255, 255, 0.035);
+
+  border: 1px solid var(--border);
+
+  color: var(--text-h);
+
+  font-size: 14px;
+
+  outline: none;
+
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+
+.dashboard-input:focus {
+  border-color: rgba(255, 101, 72, 0.55);
+
+  background: rgba(255, 255, 255, 0.055);
+}
+
+
+.dashboard-input-disabled {
+  color: rgba(167, 169, 180, 0.55);
+
+  cursor: not-allowed;
+}
+
+.dashboard-actions {
+  display: flex;
+
+  justify-content: flex-end;
+
+  margin-top: 25px;
+}
+
+
+.dashboard-save {
+  height: 40px;
+
+  padding: 0 18px;
+
+  border: none;
+  border-radius: 8px;
+
+  background: var(--accent);
+
+  color: white;
+
+  font-size: 13px;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+
+.dashboard-save:hover {
+  background: var(--accent-light);
+
+  box-shadow: 0 6px 20px rgba(255, 101, 72, 0.18);
+}
+
+
+.dashboard-save:active {
+  transform: translateY(1px);
+}
+
+
+.dashboard-secondary-button {
+  height: 38px;
+
+  padding: 0 15px;
+
+  border-radius: 8px;
+
+  background: transparent;
+
+  border: 1px solid var(--border);
+
+  color: var(--text-h);
+
+  font-size: 13px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+
+.dashboard-secondary-button:hover {
+  background: rgba(255, 255, 255, 0.045);
+
+  border-color: rgba(255, 101, 72, 0.4);
+
+  color: var(--accent-light);
+}
+
+.dashboard-security {
+  display: flex;
+
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 20px;
+
+  padding: 17px;
+
+  border-radius: 10px;
+
+  background: rgba(255, 255, 255, 0.025);
+
+  border: 1px solid var(--border);
+}
+
+
+.dashboard-security-title {
+  color: var(--text-h);
+
+  font-size: 14px;
+  font-weight: 700;
+}
+
+
+.dashboard-security-description {
+  margin-top: 5px;
+
+  color: var(--text);
+
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dashboard-danger {
+  background: rgba(255, 70, 70, 0.015);
+}
+
+
+.dashboard-delete {
+  display: flex;
+
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 20px;
+
+  padding: 17px;
+
+  border-radius: 10px;
+
+  border: 1px solid rgba(255, 80, 80, 0.16);
+
+  background: rgba(255, 60, 60, 0.025);
+}
+
+
+.dashboard-delete-button {
+  height: 38px;
+
+  padding: 0 15px;
+
+  flex-shrink: 0;
+
+  border-radius: 8px;
+
+  background: transparent;
+
+  border: 1px solid rgba(255, 90, 90, 0.35);
+
+  color: #ff7777;
+
+  font-size: 13px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+
+.dashboard-delete-button:hover {
+  background: rgba(255, 70, 70, 0.08);
+
+  border-color: rgba(255, 90, 90, 0.6);
+
+  color: #ff9999;
+}
+
+
+@media (max-width: 1484px) {
+  .container {
+    width: 100%;
+    height: 100%;
+
+    border: none;
+    border-radius: 0;
+  }
+
+}
+
+@media (max-width: 650px) {
+
+  .dashboard {
+    min-height: calc(100vh - 70px);
+
+    padding: 20px 12px 50px;
+  }
+
+
+  .dashboard-card {
+    border-radius: 12px;
+  }
+
+
+  .dashboard-header {
+    padding: 25px 20px;
+  }
+
+
+  .dashboard-title {
+    font-size: 24px;
+  }
+
+
+  .dashboard-section {
+    padding: 25px 20px;
+  }
+
+
+  .dashboard-profile {
+    flex-direction: column;
+
+    gap: 20px;
+  }
+
+
+  .dashboard-avatar {
+    width: 68px;
+    height: 68px;
+
+    font-size: 24px;
+  }
+
+
+  .dashboard-profile-info {
+    width: 100%;
+  }
+
+
+  .dashboard-actions {
+    justify-content: stretch;
+  }
+
+
+  .dashboard-save {
+    width: 100%;
+  }
+
+
+  .dashboard-security,
+  .dashboard-delete {
+    flex-direction: column;
+
+    align-items: stretch;
+  }
+
+
+  .dashboard-secondary-button,
+  .dashboard-delete-button {
+    width: 100%;
+  }
+
 }
 
 @keyframes slidei {

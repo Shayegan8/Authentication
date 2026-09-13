@@ -21,7 +21,7 @@ func Comment(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if postid == "" || body == "" {
+		if postid == "" || body == "" || len(body) > 30000 {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return

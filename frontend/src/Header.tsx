@@ -46,6 +46,9 @@ export default function Header() {
 
             <div className="head-right">
                 <Link className="posts" to="/posts">
+                    Info
+                </Link>
+                <Link className="posts" to="/posts">
                     Posts
                 </Link>
 

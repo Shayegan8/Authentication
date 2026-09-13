@@ -184,7 +184,7 @@ export default function Middle() {
             backiRooti!.style.display = "none"
             itsMenu!.style.display = "none"
         })
-    }, )
+    },)
     switch (loc.pathname) {
         case "/":
             Elementa = <div className="middle">
@@ -461,10 +461,29 @@ export default function Middle() {
                                     verificationRefs.current[1]!.value + verificationRefs.current[2]!.value +
                                     verificationRefs.current[3]!.value + verificationRefs.current[4]!.value
                                 const res = await loginValidationSubmit(inputi)
-                                if (!res)
-                                    console.log("Success")
-                                else
-                                    console.log("Failure")
+                                const slidechips = slideshit.current
+
+                                if (slidechips) {
+                                    if (!res) {
+                                        slidechips.innerText = "Successfully Logged in!"
+                                        navigate("/")
+                                        console.log("Gambis")
+                                    } else {
+                                        slidechips.innerText = "Login failed, redirecting..."
+                                        navigate("/register")
+                                        console.log("Failure")
+                                    }
+
+                                    slidechips.style.display = "block"
+
+                                    slidechips.classList.remove("registered-show")
+                                    void slidechips.offsetWidth
+                                    slidechips.classList.add("registered-show")
+
+                                    setTimeout(() => {
+                                        slidechips.style.display = "none"
+                                    }, 3000)
+                                }
                             }
                         }}
                         className="verification-submit">
@@ -485,6 +504,80 @@ export default function Middle() {
         case "/post/" + params.postid:
             break
         case "/dashboard":
+            Elementa = <div className="dashboard">
+                <div className="dashboard-card">
+
+                    <div className="dashboard-header">
+                        <div>
+                            <div className="dashboard-title">
+                                Account
+                            </div>
+                            <div className="dashboard-subtitle">
+                                Manage your account settings.
+                            </div>
+                        </div>
+                    </div>
+
+                    <section className="dashboard-section">
+                        <div className="dashboard-section-header">
+                            <div>
+                                <h2>Security</h2>
+                                <p>
+                                    Manage your password and account security.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="dashboard-security">
+                            <div>
+                                <div className="dashboard-security-title">
+                                    Password
+                                </div>
+
+                                <div className="dashboard-security-description">
+                                    Change your password through the password
+                                    recovery process.
+                                </div>
+                            </div>
+
+                            <button
+                                className="dashboard-secondary-button"
+                                onClick={() => navigate("/forgetPassword")}
+                            >
+                                Change password
+                            </button>
+                        </div>
+                    </section>
+
+                    <section className="dashboard-section dashboard-danger">
+                        <div className="dashboard-section-header">
+                            <div>
+                                <h2>Danger zone</h2>
+                                <p>
+                                    Permanently delete your account and its data.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="dashboard-delete">
+                            <div>
+                                <div className="dashboard-security-title">
+                                    Delete account
+                                </div>
+
+                                <div className="dashboard-security-description">
+                                    This action cannot be undone.
+                                </div>
+                            </div>
+
+                            <button className="dashboard-delete-button">
+                                Delete account
+                            </button>
+                        </div>
+                    </section>
+
+                </div>
+            </div>
             break
         default:
             Elementa = <div>404 - Page Not Found</div>

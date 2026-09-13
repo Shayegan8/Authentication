@@ -40,7 +40,6 @@ func SecurityHandlers(router http.Handler) http.Handler {
 
 func main() {
 	json.Unmarshal(myblog.ConfigBuffer, &myblog.Config)
-	myblog.InitRDB()
 	myblog.InitPDB()
 	router := mux.NewRouter()
 

@@ -1,7 +1,13 @@
 CREATE TABLE IF NOT EXISTS users(
     userid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email VARCHAR(255) UNIQUE, username VARCHAR(50) UNIQUE,
-    password BYTEA, refreshToken BYTEA, timestamp NUMERIC DEFAULT EXTRACT(EPOCH FROM NOW())
+    password BYTEA, timestamp NUMERIC DEFAULT EXTRACT(EPOCH FROM NOW())
+);
+
+CREATE TABLE IF NOT EXISTS sessions(
+    sessionid UUID PRIMARY KEY DEFAULT get_random_uuid(),
+    userid UUID REFERENCES users(userid) NOT NULL ON DELETE CASCADE,
+    refreshToken BYTEA
 );
 
 CREATE INDEX email_idx ON users(email);
@@ -25,12 +31,12 @@ CREATE TRIGGER checker BEFORE INSERT OR UPDATE ON users
     FOR EACH ROW EXECUTE FUNCTION checker();
 
 CREATE TABLE IF NOT EXISTS posts(
-    postid UUID PRIMARY KEY DEFAULT gen_random_uuid(), userid UUID REFERENCES users(userid) NOT NULL,
+    postid UUID PRIMARY KEY DEFAULT gen_random_uuid(), userid UUID REFERENCES users(userid) NOT NULL ON DELETE CASCADE,
     title VARCHAR(60) NOT NULL, info VARCHAR(255) NOT NULL, body TEXT NOT NULL, timestamp NUMERIC DEFAULT EXTRACT(EPOCH FROM NOW())
 );
 
 CREATE TABLE IF NOT EXISTS admins(
-    adminid UUID REFERENCES users(userid)
+    adminid UUID REFERENCES users(userid) ON DELETE CASCADE
 );
 
 CREATE OR REPLACE PROCEDURE insert_post(
@@ -53,14 +59,14 @@ $$;
 
 CREATE TABLE IF NOT EXISTS comments(
     commentid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    postid UUID REFERENCES posts(postid) NOT NULL, userid UUID REFERENCES users(userid) NOT NULL,
+    postid UUID REFERENCES posts(postid) NOT NULL ON DELETE CASCADE, userid UUID REFERENCES users(userid) NOT NULL ON DELETE CASCADE,
     body VARCHAR(104000) NOT NULL, timestamp NUMERIC DEFAULT EXTRACT(EPOCH FROM NOW())
 );
 
 CREATE TABLE IF NOT EXISTS replies(
     replyid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     commentid UUID REFERENCES comments(commentid) NOT NULL,
-    postid UUID REFERENCES posts(postid) NOT NULL, userid UUID REFERENCES users(userid) NOT NULL,
+    postid UUID REFERENCES posts(postid) NOT NULL ON DELETE CASCADE, userid UUID REFERENCES users(userid) NOT NULL ON DELETE CASCADE,
     body VARCHAR(104000) NOT NULL, timestamp NUMERIC DEFAULT EXTRACT(EPOCH FROM NOW())
 );
 

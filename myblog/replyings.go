@@ -22,7 +22,7 @@ func Reply(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if postid == "" || body == "" || commentid == "" {
+		if postid == "" || body == "" || commentid == "" || len(body) > 30000 {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
