@@ -433,19 +433,10 @@ export default function Middle() {
                     </section>
 
                     <section className="dashboard-section dashboard-danger">
-                        <div className="dashboard-section-header">
-                            <div>
-                                <h3>Danger zone</h3>
-                                <p>
-                                    Permanently delete your account and its data.
-                                </p>
-                            </div>
-                        </div>
-
                         <div className="dashboard-delete">
                             <div>
                                 <div className="dashboard-security-title">
-                                    Delete account
+                                    Logout
                                 </div>
 
                                 <div className="dashboard-security-description">
@@ -454,7 +445,7 @@ export default function Middle() {
                             </div>
 
                             <button className="dashboard-delete-button">
-                                Delete account
+                                Logout account
                             </button>
                         </div>
                     </section>
