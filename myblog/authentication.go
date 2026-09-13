@@ -466,7 +466,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		l("OK im here in login")
-		rows, errio := Postgres_client.Query(r.Context(), "SELECT refreshToken, userid, password FROM users WHERE email=$1", email)
+		rows, errio := Postgres_client.Query(r.Context(), "SELECT userid, password FROM users WHERE email=$1", email)
 		if errio != nil {
 			l("server cheror?", errio)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -475,10 +475,10 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 		}
 		if rows.Next() {
 			l("ok some pussy pussy")
-			var refreshTokenHash []byte
+			var refreshTokenHash []byte // this is not hash but anyway
 			var userid string
 			var hashedPassword []byte
-			refreshToken := make([]byte, 300)
+			refreshToken := make([]byte, 1000)
 			rand.Read(refreshToken)
 			refreshTokenHex := hex.EncodeToString(refreshToken)
 
@@ -497,7 +497,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			}
 
 			var sessionid string
-			eri := Postgres_client.QueryRow(r.Context(), "UPDATE users SET refreshToken = $1 WHERE email=$2 RETURNING sessionid", refreshTokenHash, marshaled["email"]).Scan(&sessionid)
+			eri := Postgres_client.QueryRow(r.Context(), "UPDATE sessions SET refreshToken = $1 WHERE userid=$2 RETURNING sessionid", refreshTokenHash, userid).Scan(&sessionid)
 			if eri != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte("Server error"))
@@ -885,18 +885,24 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		fmt.Println("IM here")
-		refreshToken := make([]byte, 300)
+		refreshToken := make([]byte, 1000)
 		rand.Read(refreshToken)
 		refreshTokenHex := hex.EncodeToString(refreshToken)
 		fmt.Println("IM here tooo")
 		var userid string
-		var sessionid string
 		err := Postgres_client.QueryRow(r.Context(),
-			"INSERT INTO users(email, username, password, refreshToken)"+
-				" VALUES ($1, $2, $3, $4) RETURNING userid, sessionid", email, username, hashedPassword, refreshToken).Scan(&userid, &sessionid)
+			"INSERT INTO users(email, username, password)"+
+				" VALUES ($1, $2, $3) RETURNING userid", email, username, hashedPassword).Scan(&userid)
 		if err == nil {
 			l("no next")
 			// give token and write success
+			var sessionid string
+			err = Postgres_client.QueryRow(r.Context(), "INSERT INTO sessions(userid, refreshToken) VALUES ($1, $2) RETURNING sessionid", userid, refreshToken).Scan(&sessionid)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte("Bad request"))
+				return
+			}
 			value := `{"userid": "` + userid + `","email": "` + email + `","refreshToken": "` + refreshTokenHex + `","sessionId": "` + sessionid + `"}`
 
 			http.SetCookie(w, &http.Cookie{
