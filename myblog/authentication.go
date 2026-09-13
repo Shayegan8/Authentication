@@ -482,15 +482,17 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			rand.Read(refreshToken)
 			refreshTokenHex := hex.EncodeToString(refreshToken)
 
-			err1 := rows.Scan(&refreshTokenHash, &userid, &hashedPassword)
+			err1 := rows.Scan(&userid, &hashedPassword)
 			rows.Close()
 			if err1 != nil {
+				l("Its because of hereee")
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write([]byte("Bad request"))
 				return
 			}
 
 			if bcrypt.CompareHashAndPassword(hashedPassword, []byte(password)) != nil {
+				l("No its heeeree")
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write([]byte("Bad request"))
 				return
@@ -518,6 +520,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		} else {
 			rows.Close()
+			l("Hereeee")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
