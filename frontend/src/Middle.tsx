@@ -404,7 +404,7 @@ export default function Middle() {
                     <section className="dashboard-section">
                         <div className="dashboard-section-header">
                             <div>
-                                <h2>Security</h2>
+                                <h3>Security</h3>
                                 <p>
                                     Manage your password and account security.
                                 </p>
@@ -435,7 +435,7 @@ export default function Middle() {
                     <section className="dashboard-section dashboard-danger">
                         <div className="dashboard-section-header">
                             <div>
-                                <h2>Danger zone</h2>
+                                <h3>Danger zone</h3>
                                 <p>
                                     Permanently delete your account and its data.
                                 </p>

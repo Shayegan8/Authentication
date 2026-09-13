@@ -7,10 +7,14 @@ CREATE TABLE IF NOT EXISTS users(
 CREATE TABLE IF NOT EXISTS sessions(
     sessionid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     userid UUID NOT NULL REFERENCES users(userid) ON DELETE CASCADE,
-    refreshToken BYTEA
+    email NOT NULL REFERENCES users(email) ON DELETE CASCADE,
+    refreshToken BYTEA UNIQUE
 );
 
-CREATE INDEX email_idx ON users(email);
+CREATE INDEX ON users(email);
+CREATE INDEX ON users(username);
+CREATE INDEX ON sessions(userid);
+CREATE INDEX ON sessions(email);
 
 CREATE OR REPLACE FUNCTION checker() RETURNS trigger AS $$
 DECLARE

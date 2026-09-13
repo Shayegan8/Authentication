@@ -243,7 +243,7 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		rowi, erra := Postgres_client.Exec(r.Context(), "DELETE FROM sessions WHERE sessionid=$1 AND refreshToken=$2", marshaled["sessionid"], marshaled["refreshToken"])
+		rowi, erra := Postgres_client.Exec(r.Context(), "DELETE FROM sessions WHERE sessionid=$1 AND refreshToken=$2 AND email=$3", marshaled["sessionid"], marshaled["refreshToken"], marshaled["email"])
 		if erra != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))

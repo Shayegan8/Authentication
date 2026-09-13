@@ -204,8 +204,7 @@ body {
 
   font-family: var(--sans);
   font-size: 15px;
-  font-weight: 600;
-
+  font-weight: 500;
   text-decoration: none;
   user-select: none;
 
@@ -844,7 +843,7 @@ body {
   color: var(--text-h);
 
   font-size: 28px;
-  font-weight: 800;
+  font-weight: 600;
 
   letter-spacing: -0.5px;
 }
@@ -875,13 +874,12 @@ body {
 }
 
 
-.dashboard-section-header h2 {
+.dashboard-section-header h3 {
   margin: 0;
 
   color: var(--text-h);
 
   font-size: 17px;
-  font-weight: 700;
 }
 
 
@@ -925,7 +923,6 @@ body {
   color: var(--accent-light);
 
   font-size: 30px;
-  font-weight: 800;
 
   user-select: none;
 }
@@ -953,7 +950,6 @@ body {
   color: var(--text);
 
   font-size: 12px;
-  font-weight: 600;
 }
 
 
@@ -1020,7 +1016,6 @@ body {
   color: white;
 
   font-size: 13px;
-  font-weight: 700;
 
   cursor: pointer;
 
@@ -1057,7 +1052,6 @@ body {
   color: var(--text-h);
 
   font-size: 13px;
-  font-weight: 600;
 
   cursor: pointer;
 
@@ -1098,7 +1092,6 @@ body {
   color: var(--text-h);
 
   font-size: 14px;
-  font-weight: 700;
 }
 
 
@@ -1150,7 +1143,6 @@ body {
   color: #ff7777;
 
   font-size: 13px;
-  font-weight: 600;
 
   cursor: pointer;
 
