@@ -26,15 +26,6 @@
   --mono: ui-monospace, Consolas, monospace;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    --contain: rgba(0, 113, 105, 0.78);
-    --headi: rgba(239, 241, 255, 0.82);
-    --verification-color: #252525;
-    --bg-solid: #495286;
-  }
-}
-
 @font-face {
   font-family: "fontak";
   src: url("http://127.0.0.1:5173/public/headerfont.ttf");
@@ -208,7 +199,7 @@ body {
 
 .posts {
   position: relative;
-
+  font-family: var(--sans);
   color: #eeeeef;
 
   font-family: var(--sans);
