@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/wenlng/go-captcha/v2/slide"
 	"golang.org/x/crypto/bcrypt"
@@ -71,7 +71,7 @@ func ForgetPasswordValidation(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if _, err := mail.ParseAddress(email); err != nil {
+		if _, err := mail.ParseAddress(email); err != nil || strings.ContainsAny(email, "\"{},\\:") {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -175,6 +175,14 @@ func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Server error"))
 			return
 		}
+		sendCount, _ := Redis_client.Incr(r.Context(), "otpf:"+marshaled["email"]).Result()
+		if sendCount == 1 {
+			Redis_client.Expire(r.Context(), "otpf:"+marshaled["email"], 10*time.Minute)
+		}
+		if sendCount > 5 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
 
 		converted, err := strconv.Atoi(marshaled["time"])
 		if err != nil {
@@ -197,6 +205,11 @@ func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
 
 		if rows.Next() { // this means if the user with this details actually exist
 			rows.Close()
+			if rows.Err() != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("Server error"))
+				return
+			}
 			newHashedLink := make([]byte, 60)
 			rand.Read(newHashedLink)
 
@@ -224,6 +237,11 @@ func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusAccepted)
 		} else {
 			rows.Close()
+			if rows.Err() != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("Server error"))
+				return
+			}
 			w.WriteHeader(http.StatusAccepted)
 		}
 	}
@@ -238,6 +256,7 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
+
 		var marshaled map[string]string
 		eri = json.Unmarshal([]byte(userData.Value), &marshaled)
 		if eri != nil {
@@ -246,13 +265,23 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if marshaled["sessionid"] == "" || marshaled["email"] == "" {
+		sessionid := marshaled["sessionid"]
+		email := marshaled["email"]
+		refreshToken := marshaled["refreshToken"]
+		if sessionid == "" || email == "" || refreshToken == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
 		}
 
-		rowi, erra := Postgres_client.Exec(r.Context(), "DELETE FROM sessions WHERE sessionid=$1 AND refreshToken=$2 AND email=$3", marshaled["sessionid"], marshaled["refreshToken"], marshaled["email"])
+		decoded, erra := hex.DecodeString(refreshToken)
+		if erra != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
+		rowi, erra := Postgres_client.Exec(r.Context(), "DELETE FROM sessions WHERE sessionid=$1 AND refreshToken=$2 AND email=$3", marshaled["sessionid"], decoded, marshaled["email"])
 		if erra != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
@@ -279,20 +308,20 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func ForgetPasswordChangeLink(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+	vars := r.URL.Query()
 	payload := r.Header
 	switch r.Method {
 	case "POST":
 		password := payload.Get("password")
-		token := vars["token"]
-		email := vars["email"]
-		if password == "" || token == "" || email == "" || len(password) > 1000 {
+		token := vars.Get("token")
+		email := vars.Get("email")
+		if password == "" || token == "" || email == "" || len(password) > 72 || len(email) > 255 || len(token) > 120 {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
 		}
 
-		if strings.ContainsAny(password, "@.\"'") {
+		if strings.ContainsAny(password, "\"{},\\:") {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -322,19 +351,27 @@ func ForgetPasswordChangeLink(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Server error"))
 			return
 		} else if res == 0 {
-			w.WriteHeader(http.StatusBadGateway)
+			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
 		} else {
-			oo, er := Postgres_client.Exec(r.Context(), "UPDATE users SET password=$1 WHERE email=$2", hashedPassword, email)
+			rowi, er := Postgres_client.Exec(r.Context(), "UPDATE users SET password=$1 WHERE email=$2", hashedPassword, email)
 			if er != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte("Server error"))
 				return
-			} else if oo.RowsAffected() == 0 {
-				w.WriteHeader(http.StatusInternalServerError)
+			}
+			if rowi.RowsAffected() == 0 {
+				w.WriteHeader(http.StatusBadRequest)
 				w.Write([]byte("Bad request"))
 				return
+			} else {
+				_, er := Postgres_client.Exec(r.Context(), "DELETE FROM sessions WHERE email=$1", email)
+				if er != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					w.Write([]byte("Server error"))
+					return
+				}
 			}
 			w.WriteHeader(http.StatusAccepted)
 		}
@@ -345,6 +382,12 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 	payload := r.Header
 	switch r.Method {
 	case "POST":
+		_, erria := r.Cookie("userData")
+		if erria == nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
 		verification := payload.Get("verification")
 		answerCookie, erria := r.Cookie("loginValidationSubmit")
 		if erria != nil {
@@ -401,11 +444,6 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 		password := marshaled["password"]
 		email := marshaled["email"]
 		tok := marshaled["tok"]
-		if timee == "" || password == "" || email == "" || tok == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
 
 		converted, err := strconv.Atoi(timee)
 		if err != nil {
@@ -420,7 +458,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		count, era := Redis_client.Incr(r.Context(), "counter"+tok+email).Result()
+		count, era := Redis_client.Incr(r.Context(), "counterl"+email).Result()
 		if era != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
@@ -428,7 +466,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if count == 1 {
-			Redis_client.Expire(r.Context(), "counter"+tok+email, 2*time.Minute)
+			Redis_client.Expire(r.Context(), "counterl"+email, 2*time.Minute)
 		}
 
 		if vercode, erro := strconv.Atoi(verification); erro == nil {
@@ -452,7 +490,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			}
 			if verificationCode == vercode {
 				_, errr := Redis_client.Del(r.Context(), tok+email).Result()
-				_, era := Redis_client.Del(r.Context(), "counter"+tok+email).Result()
+				_, era := Redis_client.Del(r.Context(), "counterl"+email).Result()
 				if errr != nil || era != nil {
 					w.WriteHeader(http.StatusInternalServerError)
 					w.Write([]byte("Server error")) // i dont think this happens, anyway
@@ -461,13 +499,13 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			} else {
 				if count == 10 {
 					_, errr := Redis_client.Del(r.Context(), tok+email).Result()
-					_, era := Redis_client.Del(r.Context(), "counter"+tok+email).Result()
+					_, era := Redis_client.Del(r.Context(), "counterl"+email).Result()
 					if errr != nil || era != nil {
 						w.WriteHeader(http.StatusInternalServerError)
 						w.Write([]byte("Server error")) // i dont think this happens, anyway
 						return
 					}
-					w.WriteHeader(http.StatusBadGateway)
+					w.WriteHeader(http.StatusTooManyRequests)
 					w.Write([]byte("Blocked"))
 					return
 				}
@@ -480,9 +518,13 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		l("OK im here in login")
-		rows, errio := Postgres_client.Query(r.Context(), "SELECT userid, password FROM users WHERE email=$1", email)
+		rows, errio := Postgres_client.Query(r.Context(), "SELECT * FROM check_userious($1)", email)
 		if errio != nil {
-			l("server cheror?", errio)
+			if strings.Contains(errio.Error(), "more than 5 device") {
+				w.WriteHeader(http.StatusConflict)
+				w.Write([]byte("Session limit reached"))
+				return
+			}
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
 			return
@@ -496,14 +538,18 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			refreshTokenHex := hex.EncodeToString(refreshToken)
 
 			err1 := rows.Scan(&userid, &hashedPassword)
-			rows.Close()
 			if err1 != nil {
 				l("Its because of hereee")
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write([]byte("Bad request"))
 				return
 			}
-
+			rows.Close()
+			if rows.Err() != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("Server error"))
+				return
+			}
 			if bcrypt.CompareHashAndPassword(hashedPassword, []byte(password)) != nil {
 				l("No its heeeree")
 				w.WriteHeader(http.StatusBadRequest)
@@ -511,15 +557,15 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			var sessionid string
-			eri := Postgres_client.QueryRow(r.Context(), "UPDATE sessions SET refreshToken = $1 WHERE userid=$2 RETURNING sessionid", refreshToken, userid).Scan(&sessionid)
+			sessionid := uuid.New().String()
+			eri := Postgres_client.QueryRow(r.Context(), "INSERT INTO sessions(userid, refreshToken, email) VALUES($1, $2, $3) RETURNING sessionid", userid, refreshToken, email).Scan(&sessionid)
 			if eri != nil {
 				l(eri)
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte("Server error"))
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte("Bad request"))
 				return
 			}
-			value := `{"userid": "` + userid + `","email": "` + email + `","refreshToken": "` + refreshTokenHex + `","sessionId": "` + sessionid + `"}`
+			value := `{"userid": "` + userid + `","email": "` + email + `","refreshToken": "` + refreshTokenHex + `","sessionid": "` + sessionid + `"}`
 			http.SetCookie(w, &http.Cookie{
 				Name:     "userData",
 				Value:    base64.StdEncoding.EncodeToString([]byte(value)),
@@ -544,6 +590,12 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 func LoginValidationJWT(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":
+		_, erria := r.Cookie("userData")
+		if erria == nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
 		answerCookie, erria := r.Cookie("loginValidationJWT")
 		if erria != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -563,6 +615,7 @@ func LoginValidationJWT(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Bad request"))
 			return
 		}
+
 		sig := decodedMap["signature"]
 		answer := decodedMap["answer"]
 		if sig == "" || answer == "" {
@@ -594,15 +647,8 @@ func LoginValidationJWT(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Server error"))
 			return
 		}
-
 		timee := marshaled["time"]
 		password := marshaled["password"]
-
-		if timee == "" || password == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
 
 		converted, err := strconv.Atoi(timee)
 		if err != nil {
@@ -624,16 +670,22 @@ func LoginValidation(w http.ResponseWriter, r *http.Request) {
 	payload := r.Header
 	switch r.Method {
 	case "POST":
+		_, erria := r.Cookie("userData")
+		if erria == nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
 		email := payload.Get("email")
 		password := payload.Get("password")
 		captchaD := payload.Get("captchaAnswer")
-		if strings.ContainsAny(password, "@.\"'") {
+		if strings.ContainsAny(password, "\"{},\\:") {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
 		}
 
-		if email == "" || captchaD == "" || password == "" || len(password) > 1000 || len(captchaD) > 100 {
+		if email == "" || captchaD == "" || password == "" || len(password) > 72 || len(captchaD) > 100 || len(email) > 255 {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -645,7 +697,7 @@ func LoginValidation(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if _, er := mail.ParseAddress(email); er != nil {
+		if _, er := mail.ParseAddress(email); er != nil || strings.ContainsAny(email, "\"{},\\:") {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -737,6 +789,13 @@ func LoginValidation(w http.ResponseWriter, r *http.Request) {
 func Login(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":
+		_, erria := r.Cookie("userData")
+		if erria == nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
 		CaptchaGeneration("loginValidation", "login", w, r)
 	}
 }
@@ -745,6 +804,12 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 	payload := r.Header
 	switch r.Method {
 	case "POST":
+		_, erria := r.Cookie("userData")
+		if erria == nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
 		verification := payload.Get("verification")
 		if verification == "" {
 			w.WriteHeader(http.StatusBadRequest)
@@ -816,12 +881,6 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 		username := marshaled["username"]
 		password := marshaled["password"]
 
-		if timee == "" || email == "" || tok == "" || username == "" || password == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request"))
-			return
-		}
-
 		converted, err := strconv.Atoi(timee)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -836,7 +895,7 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		count, era := Redis_client.Incr(r.Context(), "counter"+tok+email).Result()
+		count, era := Redis_client.Incr(r.Context(), "counter"+email).Result()
 		if era != nil {
 			l("counter issue")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -845,7 +904,7 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if count == 1 {
-			Redis_client.Expire(r.Context(), "counter"+tok+email, 2*time.Minute)
+			Redis_client.Expire(r.Context(), "counter"+email, 2*time.Minute)
 		}
 
 		if vercode, erro := strconv.Atoi(verification); erro == nil {
@@ -873,7 +932,7 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			if verificationCode == vercode {
 				l("fucking same")
 				_, errr := Redis_client.Del(r.Context(), tok+email).Result()
-				_, era := Redis_client.Del(r.Context(), "counter"+tok+email).Result()
+				_, era := Redis_client.Del(r.Context(), "counter"+email).Result()
 				if errr != nil || era != nil {
 					l("fucking eeeerorrr")
 					w.WriteHeader(http.StatusInternalServerError)
@@ -884,7 +943,7 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 				if count == 10 {
 					l("goz jerk")
 					_, errr := Redis_client.Del(r.Context(), tok+email).Result()
-					_, era := Redis_client.Del(r.Context(), "counter"+tok+email).Result()
+					_, era := Redis_client.Del(r.Context(), "counter"+email).Result()
 					if errr != nil || era != nil {
 						l("fuckin errorrr in c 10")
 						w.WriteHeader(http.StatusInternalServerError)
@@ -892,7 +951,7 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 						return
 					}
 					l("blocked")
-					w.WriteHeader(http.StatusBadGateway)
+					w.WriteHeader(http.StatusTooManyRequests)
 					w.Write([]byte("Blocked"))
 					return
 				}
@@ -930,12 +989,12 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			var sessionid string
 			err = Postgres_client.QueryRow(r.Context(), "INSERT INTO sessions(userid, refreshToken, email) VALUES ($1, $2, $3) RETURNING sessionid", userid, refreshToken, marshaled["email"]).Scan(&sessionid)
 			if err != nil {
-				l("Its hereo!")
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte("Bad request"))
+				Postgres_client.Exec(r.Context(), "DELETE FROM users WHERE userid=$1", userid)
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte("Server error"))
 				return
 			}
-			value := `{"userid": "` + userid + `","email": "` + email + `","refreshToken": "` + refreshTokenHex + `","sessionId": "` + sessionid + `"}`
+			value := `{"userid": "` + userid + `","email": "` + email + `","refreshToken": "` + refreshTokenHex + `","sessionid": "` + sessionid + `"}`
 
 			http.SetCookie(w, &http.Cookie{
 				Name:     "userData",
@@ -962,6 +1021,12 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 func RegisterValidationJWT(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":
+		_, erria := r.Cookie("userData")
+		if erria == nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
 		l("So here we are")
 		answerCookie, erria := r.Cookie("registerValidationJWT")
 		if erria != nil {
@@ -1044,23 +1109,30 @@ func RegisterValidation(w http.ResponseWriter, r *http.Request) {
 	payload := r.Header
 	switch r.Method {
 	case "POST":
+		_, erria := r.Cookie("userData")
+		if erria == nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
 		log.Println("somethong for registerValidation need to be happen right?")
 		captchaD := payload.Get("captchaAnswer")
 		log.Println("The answer we found: ", captchaD)
 		email := payload.Get("email")
 		username := payload.Get("username")
 		password := payload.Get("password")
+
 		log.Println("Data we received from user,", email)
 		log.Println("CaptchaD:")
 		log.Println(captchaD)
-		if username == "" || password == "" || email == "" || captchaD == "" || len(username) > 100 || len(password) > 1000 || len(captchaD) > 100 {
+		if username == "" || password == "" || email == "" || captchaD == "" || len(email) > 255 || len(username) > 100 || len(password) > 72 || len(captchaD) > 100 {
 			l("userCSRF")
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
 		}
 
-		if strings.ContainsAny(username, "@.\"'") || strings.ContainsAny(password, "@.\"'") {
+		if strings.ContainsAny(username, "\"{},\\:") || strings.ContainsAny(password, "\"{},\\:") {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -1072,7 +1144,7 @@ func RegisterValidation(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if _, er := mail.ParseAddress(email); er != nil {
+		if _, er := mail.ParseAddress(email); er != nil || strings.ContainsAny(email, "\"{},\\:") {
 			l("email problem")
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
@@ -1177,6 +1249,12 @@ func RegisterValidation(w http.ResponseWriter, r *http.Request) {
 func Register(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":
+		_, erria := r.Cookie("userData")
+		if erria == nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
 		CaptchaGeneration("registerValidation", "register", w, r)
 	}
 }
@@ -1227,6 +1305,7 @@ func CaptchaGeneration(name string, endpoint string, w http.ResponseWriter, r *h
 	l(strishit)
 	pipe.Set(r.Context(), "captcha"+buffTokHex, strishit, 1*time.Minute)
 	pipe.Exec(r.Context())
+
 	http.SetCookie(w, &http.Cookie{
 		Name: name,
 		Value: base64.StdEncoding.EncodeToString([]byte(`{
@@ -1333,6 +1412,27 @@ func CaptchaToken(captchaData map[string]string, name string, endpoint string, e
 
 func Verify(email string, name string, endpoint string, username string, password string, w http.ResponseWriter, r *http.Request) {
 	vcode := rnd.IntN(90000) + 10000
+	if username == "" {
+		sendCount, _ := Redis_client.Incr(r.Context(), "otp:"+email).Result()
+		if sendCount == 1 {
+			Redis_client.Expire(r.Context(), "otp:"+email, 10*time.Minute)
+		}
+		if sendCount > 5 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+	} else {
+		sendCount, _ := Redis_client.Incr(r.Context(), "otpl:"+email).Result()
+		if sendCount == 1 {
+			Redis_client.Expire(r.Context(), "otpl:"+email, 10*time.Minute)
+		}
+		if sendCount > 5 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+
+	}
+
 	log.Println("The answer for verify is", vcode)
 	go func() {
 		msg := []byte("To: " + email + "\r\n" +

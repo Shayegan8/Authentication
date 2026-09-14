@@ -30,34 +30,44 @@ export default function Header() {
     })
 
     return (
-        <div className="head">
-            <div className="head-left">
-                <div className="log">
-                    Shayegan8
+        <>
+            <div className="head">
+                <div className="head-left">
+                    <div className="log">
+                        Shayegan8
+                    </div>
+
+                    <div
+                        className="searchbar"
+                        contentEditable="true"
+                        ref={searchBarRef}
+                        data-placeholder="Search..."
+                    />
                 </div>
 
-                <div
-                    className="searchbar"
-                    contentEditable="true"
-                    ref={searchBarRef}
-                    data-placeholder="Search..."
-                />
-            </div>
+                <div className="head-right">
+                    <Link className="posts" to="/posts">
+                        About me
+                    </Link>
+                    <Link className="posts" to="/posts">
+                        Posts
+                    </Link>
 
-            <div className="head-right">
-                <Link className="posts" to="/posts">
+                    <div className="auth-links">
+                        <Link className="auth" to="/login">Signin</Link>
+                        <span>/</span>
+                        <Link className="auth" to="/register">Signup</Link>
+                    </div>
+                </div>
+            </div>
+            <div className="head-bottom">
+                <Link className="posts" to="/posts" style={{display: "flex"}}>
                     About me
                 </Link>
-                <Link className="posts" to="/posts">
+                <Link className="posts" to="/posts" style={{display: "flex"}}>
                     Posts
                 </Link>
-
-                <div className="auth-links">
-                    <Link className="auth" to="/login">Signin</Link>
-                    <span>/</span>
-                    <Link className="auth" to="/register">Signup</Link>
-                </div>
             </div>
-        </div>
+        </>
     )
 }

@@ -83,9 +83,9 @@ func main() {
 	router.HandleFunc("/register/validation/jwt", myblog.RegisterValidationJWT)
 	router.HandleFunc("/register/validation/submit", myblog.RegisterValidationSubmit)
 	router.HandleFunc("/forgetPassword", myblog.ForgetPassword)
-	router.HandleFunc("/forgetPassword/validate", myblog.ForgetPasswordValidation)
-	router.HandleFunc("/forgetPassword/validate/jwt", myblog.ForgetPasswordValidationJWT)
-	router.HandleFunc("/forgetPassword/{key}", myblog.ForgetPasswordChangeLink)
+	router.HandleFunc("/forgetPassword/validation", myblog.ForgetPasswordValidation)
+	router.HandleFunc("/forgetPassword/validation/jwt", myblog.ForgetPasswordValidationJWT)
+	router.HandleFunc("/forgetPassword/t", myblog.ForgetPasswordChangeLink).Queries("token", "email")
 
 	rrouter := handlers.LoggingHandler(os.Stdout, router)
 	rrouter = SecurityHandlers(rrouter)

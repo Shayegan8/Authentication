@@ -1,14 +1,14 @@
 CREATE TABLE IF NOT EXISTS users(
     userid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email VARCHAR(255) UNIQUE, username VARCHAR(50) UNIQUE,
-    password BYTEA, timestamp NUMERIC DEFAULT EXTRACT(EPOCH FROM NOW())
+    password BYTEA
 );
 
 CREATE TABLE IF NOT EXISTS sessions(
     sessionid UUID UNIQUE DEFAULT gen_random_uuid(),
     userid UUID NOT NULL REFERENCES users(userid) ON DELETE CASCADE,
     email VARCHAR(255) NOT NULL REFERENCES users(email) ON DELETE CASCADE,
-    refreshToken BYTEA UNIQUE
+    refreshToken BYTEA UNIQUE, timestamp NUMERIC DEFAULT EXTRACT(EPOCH FROM NOW())
 );
 
 CREATE INDEX ON users(email);
@@ -25,14 +25,15 @@ DECLARE
         timen := EXTRACT(EPOCH FROM NOW());
         timenjerk := timen - OLD.timestamp;
         IF timenjerk > 2419200 THEN
-            -- Well in here i really dont see any reasoning why i should remove something with update from users, exception is fine
+            -- DELETE FROM sessions WHERE sessionid = OLD.sessionid; we do this delete in comments and replies apis
             RAISE EXCEPTION 'You don''t have this refresh token anymore, login again';
         END IF;
         RETURN NEW;
     END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER checker BEFORE INSERT OR UPDATE ON users
+
+CREATE TRIGGER checker BEFORE UPDATE ON sessions
     FOR EACH ROW EXECUTE FUNCTION checker();
 
 CREATE TABLE IF NOT EXISTS posts(
@@ -44,23 +45,23 @@ CREATE TABLE IF NOT EXISTS admins(
     adminid UUID NOT NULL REFERENCES users(userid) ON DELETE CASCADE
 );
 
-CREATE OR REPLACE PROCEDURE insert_post(
-    userid_ UUID, 
-    title_ VARCHAR(80), 
-    info_ TEXT, 
-    body_ TEXT
-) 
-LANGUAGE plpgsql 
-AS $$
+CREATE OR REPLACE FUNCTION check_userious(_email VARCHAR(255))
+RETURNS TABLE (userid UUID, password BYTEA)
+AS
+$$
+DECLARE
+    nsessions NUMERIC;
 BEGIN
-    IF EXISTS (SELECT 1 FROM admins WHERE userid=userid_) THEN
-        UPDATE users SET timestamp = EXTRACT(EPOCH FROM NOW()) WHERE userid = userid_;
-        INSERT INTO posts(title, info, body) VALUES (title_, info_, body_);
-    ELSE
-        RAISE EXCEPTION 'You are not admin'; -- in case user wasnt admin
+    SELECT COUNT(*) INTO nsessions FROM sessions WHERE email = _email;
+
+    if nsessions == 5 THEN
+        RAISE EXCEPTION 'You can''t have more than 5 device here';
     END IF;
+
+    RETURN QUERY SELECT u.userid, u.password FROM users u WHERE u.email = _email;
 END;
-$$;
+$$
+LANGUAGE plpgsql;
 
 CREATE TABLE IF NOT EXISTS comments(
     commentid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -75,17 +76,24 @@ CREATE TABLE IF NOT EXISTS replies(
     body VARCHAR(104000) NOT NULL, timestamp NUMERIC DEFAULT EXTRACT(EPOCH FROM NOW())
 );
 
-CREATE OR REPLACE PROCEDURE insert_comment(
+CREATE OR REPLACE FUNCTION insert_comment(
     postid_ UUID,
     userid_ UUID,
+    sessionid_ UUID,
     body_ TEXT
-) LANGUAGE plpgsql
+) RETURNS UUID
 AS $$
+DECLARE result UUID;
 BEGIN
-    IF EXISTS (SELECT 1 FROM userid WHERE userid=userid_) THEN
+    IF EXISTS (SELECT 1 FROM users WHERE userid=userid_) THEN
         IF EXISTS (SELECT 1 FROM posts WHERE postid=postid_) THEN
-            UPDATE users SET timestamp = EXTRACT(EPOCH FROM NOW()) WHERE userid = userid_;
-            INSERT INTO comments(postid, userid, body) VALUES(postid_, userid_, body_) RETURNING commentid;
+            IF EXISTS (SELECT 1 FROM sessions WHERE sessionid=sessionid_) THEN
+                UPDATE sessions SET timestamp = EXTRACT(EPOCH FROM NOW()) WHERE sessionid = sessionid_;
+                INSERT INTO comments(postid, userid, body) VALUES(postid_, userid_, body_) RETURNING commentid INTO result;
+                RETURN result;
+            ELSE
+                RAISE EXCEPTION 'Session dosen''t exist';
+            END IF;
         ELSE
             RAISE EXCEPTION 'Post dosen''t exist';
         END IF;
@@ -93,21 +101,29 @@ BEGIN
         RAISE EXCEPTION 'User dosen''t exist';
     END IF;
 END;
-$$;
+$$
+LANGUAGE plpgsql;
 
-CREATE OR REPLACE PROCEDURE insert_reply(
+CREATE OR REPLACE FUNCTION insert_reply(
     postid_ UUID,
     userid_ UUID,
     commentid_ UUID,
+    sessionid_ UUID,
     body_ TEXT
-) LANGUAGE plpgsql
+) RETURNS UUID
 AS $$
+DECLARE result UUID;
 BEGIN
-    IF EXISTS (SELECT 1 FROM userid WHERE userid=userid_) THEN
+    IF EXISTS (SELECT 1 FROM users WHERE userid=userid_) THEN
         IF EXISTS (SELECT 1 FROM posts WHERE postid=postid_) THEN
             IF EXISTS (SELECT 1 FROM comments WHERE commentid=commentid_) THEN
-                UPDATE users SET timestamp = EXTRACT(EPOCH FROM NOW()) WHERE userid = userid_;
-                INSERT INTO replies(postid, userid, commentid, body) VALUES (postid_, userid_, commentid_, body_) RETURNING replyid;
+                IF EXISTS (SELECT 1 FROM sessions WHERE sessionid=sessionid_) THEN
+                    UPDATE sessions SET timestamp = EXTRACT(EPOCH FROM NOW()) WHERE sessionid = sessionid_;
+                    INSERT INTO replies(postid, userid, commentid, body) VALUES (postid_, userid_, commentid_, body_) RETURNING replyid INTO result;
+                    RETURN result; 
+                ELSE
+                    RAISE EXCEPTION 'session dosent''t exist';
+                END IF;
             ELSE
                 RAISE EXCEPTION 'Comment dosent''t exist';
             END IF;
@@ -118,4 +134,5 @@ BEGIN
         RAISE EXCEPTION 'User dosen''t exist';
     END IF;
 END;
-$$;
+$$
+LANGUAGE plpgsql;
