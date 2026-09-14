@@ -581,6 +581,12 @@ body {
   color: var(--verification-color);
 }
 
+.timer {
+  color: #ff6548;
+  margin-top: 4px;
+  font-size: 22px;
+}
+
 .verification-code {
   display: flex;
   flex-direction: row;

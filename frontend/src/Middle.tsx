@@ -40,14 +40,17 @@ export default function Middle() {
             window.location.reload()
         } else
             if (!check) { // if it wasnt 202 
+                setRemaining(120)
                 setVerification(true)
                 console.log("I SET THIS MOTHER FUCKER")
                 if (username)
                     await navigate("/register/validation/jwt")
                 else
                     await navigate("/login/validation/jwt")
-            } else
+            } else {
+                setVerification(false)
                 await navigate("/error")
+            }
     }
 
     const authonioationnn = () => {
@@ -87,7 +90,34 @@ export default function Middle() {
                     />
                 </div>
 
-                <div className="register-submit" ref={submitRegister}>
+                <div className="register-submit" onClick={() => {
+                    const backiRooti = captchaBackground.current
+                    const itsMenu = captchaMenu.current
+                    let captcha
+                    if (loc.pathname == "/register")
+                        captcha = register()
+                    else if (loc.pathname == "/login")
+                        captcha = login()
+                    captcha?.then((captch) => {
+                        if (captch.status == 202) {
+                            setCaptchaData({
+                                masterImage: captch.masterImage,
+                                titleImage: captch.titleImage,
+                                dx: captch.dx,
+                                dy: captch.dy
+                            })
+
+                            if (backiRooti) {
+                                rooti?.appendChild(backiRooti)
+                                backiRooti.style.display = "block"
+                            }
+                            if (itsMenu) {
+                                rooti?.appendChild(itsMenu)
+                                itsMenu.style.display = "block"
+                            }
+                        }
+                    })
+                }}>
                     {loc.pathname == "/register" ? "Create account" : "Login"}
                 </div>
 
@@ -214,8 +244,14 @@ export default function Middle() {
                     className="verification-submit">
                     Submit
                 </button>
-            </div>
 
+                <div className="timer">
+                    {Math.floor(remaining / 60) + ":"}
+                    {String(remaining % 60).padStart(2, "0")}
+                </div>
+            </div>
+        else
+            navigate("/")
     }
     const loc = useLocation()
     const params = useParams()
@@ -224,12 +260,48 @@ export default function Middle() {
     const passwordRef = useRef<HTMLDivElement>(null)
     const userNameRef = useRef<HTMLDivElement>(null)
     const verificationRefs = useRef<Array<HTMLInputElement | null>>([])
-    const submitRegister = useRef<HTMLDivElement>(null)
     let Elementa: React.JSX.Element
     const captchaBackground = useRef<HTMLDivElement>(null)
     const captchaMenu = useRef<HTMLDivElement>(null)
     const slideshit = useRef<HTMLDivElement>(null)
     const rooti = useContext(RootElementContext)
+    const [remaining, setRemaining] = useState(120)
+    useEffect(() => {
+        if (!verification && !loc.pathname.includes("/validation/jwt"))
+            return
+
+        if (remaining <= 0) {
+            const slidechips = slideshit.current
+
+            if (slidechips) {
+                slidechips.innerText = "Timeout!"
+                slidechips.style.display = "block"
+
+                slidechips.classList.remove("registered-show")
+                void slidechips.offsetWidth
+                slidechips.classList.add("registered-show")
+
+                const redirectTimer = setTimeout(() => {
+                    slidechips.style.display = "none"
+
+                    if (loc.pathname == "/register/validation/jwt")
+                        navigate("/register")
+                    else
+                        navigate("/login")
+                }, 3000)
+
+                return () => clearTimeout(redirectTimer)
+            }
+            return
+        }
+
+        const timer = setTimeout(() => {
+            setRemaining(v => v - 1)
+        }, 1000)
+
+        return () => clearTimeout(timer)
+    }, [remaining])
+
     const handleVerificationInput = (
         e: React.ChangeEvent<HTMLInputElement>,
         index: number
@@ -240,9 +312,8 @@ export default function Middle() {
 
         e.target.value = digit
 
-        if (digit && index < 4) {
+        if (digit && index < 4)
             verificationRefs.current[index + 1]?.focus()
-        }
     }
 
     const handleVerificationKeyDown = (
@@ -321,36 +392,7 @@ export default function Middle() {
                     k.preventDefault()
             })
         }
-
-        const query = submitRegister.current
-        const backiRooti = captchaBackground.current
-        const itsMenu = captchaMenu.current
-        query?.addEventListener('click', async () => {
-            let captcha
-            if (loc.pathname == "/register")
-                captcha = await register()
-            else if (loc.pathname == "/login")
-                captcha = await login()
-
-            if (captcha && captcha.status == 202) {
-                setCaptchaData({
-                    masterImage: captcha.masterImage,
-                    titleImage: captcha.titleImage,
-                    dx: captcha.dx,
-                    dy: captcha.dy
-                })
-
-                rooti?.appendChild(backiRooti!)
-                rooti?.appendChild(itsMenu!)
-                backiRooti!.style.display = "block"
-                itsMenu!.style.display = "block"
-            }
-        })
-        backiRooti?.addEventListener('click', () => {
-            backiRooti!.style.display = "none"
-            itsMenu!.style.display = "none"
-        })
-    },)
+    })
     switch (loc.pathname) {
         case "/":
             Elementa = <div className="middle">
@@ -459,7 +501,13 @@ export default function Middle() {
     }
 
     return (<>
-        <div className="captchauation" ref={captchaBackground}>
+        <div className="captchauation" ref={captchaBackground} onClick={() => {
+            if (captchaBackground.current)
+                captchaBackground.current.style.display = "none"
+
+            if (captchaMenu.current)
+                captchaMenu.current.style.display = "none"
+        }}>
         </div>
         <div className="menuitself" ref={captchaMenu}>
             {captchaData && (

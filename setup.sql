@@ -5,14 +5,15 @@ CREATE TABLE IF NOT EXISTS users(
 );
 
 CREATE TABLE IF NOT EXISTS sessions(
-    sessionid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    sessionid UUID UNIQUE DEFAULT gen_random_uuid(),
     userid UUID NOT NULL REFERENCES users(userid) ON DELETE CASCADE,
-    email NOT NULL REFERENCES users(email) ON DELETE CASCADE,
+    email VARCHAR(255) NOT NULL REFERENCES users(email) ON DELETE CASCADE,
     refreshToken BYTEA UNIQUE
 );
 
 CREATE INDEX ON users(email);
 CREATE INDEX ON users(username);
+CREATE INDEX ON sessions(sessionid);
 CREATE INDEX ON sessions(userid);
 CREATE INDEX ON sessions(email);
 

@@ -101,7 +101,12 @@ func ForgetPasswordValidation(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		converted, _ := strconv.Atoi(marshaled["time"])
+		converted, err := strconv.Atoi(marshaled["time"])
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
 
 		if (time.Now().Unix() - int64(converted)) > 120 {
 			w.WriteHeader(http.StatusBadRequest)
@@ -111,7 +116,7 @@ func ForgetPasswordValidation(w http.ResponseWriter, r *http.Request) {
 
 		captchaD := payload.Get("captchaAnswer")
 		var captchaData map[string]string
-		err := json.Unmarshal([]byte(captchaD), &captchaData)
+		err = json.Unmarshal([]byte(captchaD), &captchaData)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
@@ -171,8 +176,12 @@ func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		converted, _ := strconv.Atoi(marshaled["time"])
-
+		converted, err := strconv.Atoi(marshaled["time"])
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
 		if (time.Now().Unix() - int64(converted)) > 120 {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
@@ -193,8 +202,8 @@ func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
 
 			pipe := Redis_client.Pipeline()
 			key := base64.StdEncoding.EncodeToString(newHashedLink)
-			pipe.LPush(r.Context(), key, marshaled["email"])
-			pipe.Expire(r.Context(), key, time.Minute*10)
+			pipe.LPush(r.Context(), marshaled["email"]+key, marshaled["email"])
+			pipe.Expire(r.Context(), marshaled["email"]+key, time.Minute*10)
 			_, eri := pipe.Exec(r.Context())
 			if eri != nil {
 				w.WriteHeader(http.StatusInternalServerError)
@@ -301,7 +310,7 @@ func ForgetPasswordChangeLink(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Server error"))
 			return
 		}
-		ea := Redis_client.Del(r.Context(), token)
+		ea := Redis_client.Del(r.Context(), email+token)
 		if ea.Err() != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
@@ -398,7 +407,12 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		converted, _ := strconv.Atoi(timee)
+		converted, err := strconv.Atoi(timee)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
 
 		if (time.Now().Unix() - int64(converted)) > 120 {
 			w.WriteHeader(http.StatusBadRequest)
@@ -438,7 +452,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			}
 			if verificationCode == vercode {
 				_, errr := Redis_client.Del(r.Context(), tok+email).Result()
-				_, era := Redis_client.Del(r.Context(), "counter"+email).Result()
+				_, era := Redis_client.Del(r.Context(), "counter"+tok+email).Result()
 				if errr != nil || era != nil {
 					w.WriteHeader(http.StatusInternalServerError)
 					w.Write([]byte("Server error")) // i dont think this happens, anyway
@@ -475,7 +489,6 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 		}
 		if rows.Next() {
 			l("ok some pussy pussy")
-			var refreshTokenHash []byte // this is not hash but anyway
 			var userid string
 			var hashedPassword []byte
 			refreshToken := make([]byte, 1000)
@@ -499,8 +512,9 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			}
 
 			var sessionid string
-			eri := Postgres_client.QueryRow(r.Context(), "UPDATE sessions SET refreshToken = $1 WHERE userid=$2 RETURNING sessionid", refreshTokenHash, userid).Scan(&sessionid)
+			eri := Postgres_client.QueryRow(r.Context(), "UPDATE sessions SET refreshToken = $1 WHERE userid=$2 RETURNING sessionid", refreshToken, userid).Scan(&sessionid)
 			if eri != nil {
+				l(eri)
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte("Server error"))
 				return
@@ -508,7 +522,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			value := `{"userid": "` + userid + `","email": "` + email + `","refreshToken": "` + refreshTokenHex + `","sessionId": "` + sessionid + `"}`
 			http.SetCookie(w, &http.Cookie{
 				Name:     "userData",
-				Value:    value,
+				Value:    base64.StdEncoding.EncodeToString([]byte(value)),
 				HttpOnly: true,
 				Secure:   true,
 				SameSite: http.SameSiteStrictMode,
@@ -590,8 +604,12 @@ func LoginValidationJWT(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		converted, _ := strconv.Atoi(timee)
-
+		converted, err := strconv.Atoi(timee)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
 		if (time.Now().Unix() - int64(converted)) > 120 {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
@@ -693,7 +711,12 @@ func LoginValidation(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		converted, _ := strconv.Atoi(timee)
+		converted, err := strconv.Atoi(timee)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
 		if (time.Now().Unix() - int64(converted)) > 120 {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
@@ -701,7 +724,7 @@ func LoginValidation(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var captchaData map[string]string
-		err := json.Unmarshal([]byte(captchaD), &captchaData)
+		err = json.Unmarshal([]byte(captchaD), &captchaData)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
@@ -799,7 +822,12 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		converted, _ := strconv.Atoi(timee)
+		converted, err := strconv.Atoi(timee)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
 
 		if (time.Now().Unix() - int64(converted)) > 120 {
 			l("time")
@@ -893,15 +921,16 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 		refreshTokenHex := hex.EncodeToString(refreshToken)
 		fmt.Println("IM here tooo")
 		var userid string
-		err := Postgres_client.QueryRow(r.Context(),
+		err = Postgres_client.QueryRow(r.Context(),
 			"INSERT INTO users(email, username, password)"+
 				" VALUES ($1, $2, $3) RETURNING userid", email, username, hashedPassword).Scan(&userid)
 		if err == nil {
 			l("no next")
 			// give token and write success
 			var sessionid string
-			err = Postgres_client.QueryRow(r.Context(), "INSERT INTO sessions(userid, refreshToken) VALUES ($1, $2) RETURNING sessionid", userid, refreshToken).Scan(&sessionid)
+			err = Postgres_client.QueryRow(r.Context(), "INSERT INTO sessions(userid, refreshToken, email) VALUES ($1, $2, $3) RETURNING sessionid", userid, refreshToken, marshaled["email"]).Scan(&sessionid)
 			if err != nil {
+				l("Its hereo!")
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write([]byte("Bad request"))
 				return
@@ -910,7 +939,7 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 
 			http.SetCookie(w, &http.Cookie{
 				Name:     "userData",
-				Value:    value,
+				Value:    base64.StdEncoding.EncodeToString([]byte(value)),
 				HttpOnly: true,
 				Secure:   true,
 				SameSite: http.SameSiteStrictMode,
@@ -992,7 +1021,12 @@ func RegisterValidationJWT(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		converted, _ := strconv.Atoi(marshaled["time"])
+		converted, err := strconv.Atoi(marshaled["time"])
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
 
 		if (time.Now().Unix() - int64(converted)) > 120 {
 			l("dangoz?")
@@ -1115,8 +1149,12 @@ func RegisterValidation(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		converted, _ := strconv.Atoi(timee)
-
+		converted, err := strconv.Atoi(timee)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
 		if (time.Now().Unix() - int64(converted)) > 120 {
 			l("time problem")
 			w.WriteHeader(http.StatusBadRequest)
@@ -1125,7 +1163,7 @@ func RegisterValidation(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var captchaData map[string]string
-		err := json.Unmarshal([]byte(captchaD), &captchaData)
+		err = json.Unmarshal([]byte(captchaD), &captchaData)
 		if err != nil {
 			l("captchaData problem")
 			w.WriteHeader(http.StatusBadRequest)
@@ -1189,7 +1227,6 @@ func CaptchaGeneration(name string, endpoint string, w http.ResponseWriter, r *h
 	l(strishit)
 	pipe.Set(r.Context(), "captcha"+buffTokHex, strishit, 1*time.Minute)
 	pipe.Exec(r.Context())
-
 	http.SetCookie(w, &http.Cookie{
 		Name: name,
 		Value: base64.StdEncoding.EncodeToString([]byte(`{
@@ -1234,7 +1271,12 @@ func CaptchaToken(captchaData map[string]string, name string, endpoint string, e
 		return
 	}
 	ts := strings.Split(str, ",")
-	xx, _ := strconv.Atoi(ts[0])
+	xx, err := strconv.Atoi(ts[0])
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Bad request"))
+		return
+	}
 	if captchaData["x"] == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("Bad request"))
@@ -1307,7 +1349,7 @@ func Verify(email string, name string, endpoint string, username string, passwor
 	buff := make([]byte, 32)
 	rand.Read(buff)
 	tok := hex.EncodeToString(buff)
-	Redis_client.Set(r.Context(), tok+email, vcode, 3*time.Minute)
+	Redis_client.Set(r.Context(), tok+email, vcode, 2*time.Minute)
 	//jwt
 	var jsonAnswer string
 	var jsonAnswerShould string
