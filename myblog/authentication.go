@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"log"
 	"math"
-	rnd "math/rand/v2"
+	"math/big"
 	"net/http"
 	"net/mail"
 	"net/smtp"
@@ -41,9 +41,16 @@ func ForgetPasswordValidation(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		email := payload.Get("email")
 		cookie, erroj := r.Cookie("forgetPasswordValidation")
+
+		if erroj != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
 		decodedCookie, ear := base64.StdEncoding.DecodeString(cookie.Value)
 
-		if erroj != nil || ear != nil {
+		if ear != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -130,9 +137,16 @@ func ForgetPasswordValidationJWT(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":
 		cookie, erroj := r.Cookie("forgetPasswordValidationJWT")
+
+		if erroj != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request"))
+			return
+		}
+
 		decodedCookie, ear := base64.StdEncoding.DecodeString(cookie.Value)
 
-		if erroj != nil || ear != nil {
+		if ear != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
@@ -257,8 +271,9 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		decoded, eri := base64.StdEncoding.DecodeString(userData.Value)
 		var marshaled map[string]string
-		eri = json.Unmarshal([]byte(userData.Value), &marshaled)
+		eri = json.Unmarshal(decoded, &marshaled)
 		if eri != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
@@ -275,13 +290,14 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 		}
 
 		decoded, erra := hex.DecodeString(refreshToken)
+
 		if erra != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request"))
 			return
 		}
 
-		rowi, erra := Postgres_client.Exec(r.Context(), "DELETE FROM sessions WHERE sessionid=$1 AND refreshToken=$2 AND email=$3", marshaled["sessionid"], decoded, marshaled["email"])
+		rowi, erra := Postgres_client.Exec(r.Context(), "DELETE FROM sessions WHERE sessionid=$1 AND refreshToken=$2 AND email=$3", marshaled["sessionid"], sha256.Sum256(decoded), marshaled["email"])
 		if erra != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("Server error"))
@@ -458,17 +474,6 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		count, era := Redis_client.Incr(r.Context(), "counterl"+email).Result()
-		if era != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-			return
-		}
-
-		if count == 1 {
-			Redis_client.Expire(r.Context(), "counterl"+email, 2*time.Minute)
-		}
-
 		if vercode, erro := strconv.Atoi(verification); erro == nil {
 			// in this case user received the code and its on the header now
 			vc, err := Redis_client.Get(r.Context(), tok+email).Result()
@@ -497,16 +502,10 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			} else {
-				if count == 10 {
-					_, errr := Redis_client.Del(r.Context(), tok+email).Result()
-					_, era := Redis_client.Del(r.Context(), "counterl"+email).Result()
-					if errr != nil || era != nil {
-						w.WriteHeader(http.StatusInternalServerError)
-						w.Write([]byte("Server error")) // i dont think this happens, anyway
-						return
-					}
-					w.WriteHeader(http.StatusTooManyRequests)
-					w.Write([]byte("Blocked"))
+				_, errr := Redis_client.Del(r.Context(), tok+email).Result()
+				if errr != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					w.Write([]byte("Server error")) // i dont think this happens, anyway
 					return
 				}
 				w.WriteHeader(http.StatusBadRequest)
@@ -558,7 +557,7 @@ func LoginValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			}
 
 			sessionid := uuid.New().String()
-			eri := Postgres_client.QueryRow(r.Context(), "INSERT INTO sessions(userid, refreshToken, email) VALUES($1, $2, $3) RETURNING sessionid", userid, refreshToken, email).Scan(&sessionid)
+			eri := Postgres_client.QueryRow(r.Context(), "INSERT INTO sessions(userid, refreshToken, email) VALUES($1, $2, $3) RETURNING sessionid", userid, sha256.Sum256(refreshToken), email).Scan(&sessionid)
 			if eri != nil {
 				l(eri)
 				w.WriteHeader(http.StatusBadRequest)
@@ -895,18 +894,6 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		count, era := Redis_client.Incr(r.Context(), "counter"+email).Result()
-		if era != nil {
-			l("counter issue")
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Server error"))
-			return
-		}
-
-		if count == 1 {
-			Redis_client.Expire(r.Context(), "counter"+email, 2*time.Minute)
-		}
-
 		if vercode, erro := strconv.Atoi(verification); erro == nil {
 			// in this case user received the code and its on the header now
 			vc, err := Redis_client.Get(r.Context(), tok+email).Result()
@@ -932,30 +919,20 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			if verificationCode == vercode {
 				l("fucking same")
 				_, errr := Redis_client.Del(r.Context(), tok+email).Result()
-				_, era := Redis_client.Del(r.Context(), "counter"+email).Result()
-				if errr != nil || era != nil {
+				if errr != nil {
 					l("fucking eeeerorrr")
 					w.WriteHeader(http.StatusInternalServerError)
 					w.Write([]byte("Server error")) // i dont think this happens, anyway
 					return
 				}
 			} else {
-				if count == 10 {
-					l("goz jerk")
-					_, errr := Redis_client.Del(r.Context(), tok+email).Result()
-					_, era := Redis_client.Del(r.Context(), "counter"+email).Result()
-					if errr != nil || era != nil {
-						l("fuckin errorrr in c 10")
-						w.WriteHeader(http.StatusInternalServerError)
-						w.Write([]byte("Server error")) // i dont think this happens, anyway
-						return
-					}
-					l("blocked")
-					w.WriteHeader(http.StatusTooManyRequests)
-					w.Write([]byte("Blocked"))
+				_, errr := Redis_client.Del(r.Context(), tok+email).Result()
+				if errr != nil {
+					l("fuckin errorrr in c 10")
+					w.WriteHeader(http.StatusInternalServerError)
+					w.Write([]byte("Server error")) // i dont think this happens, anyway
 					return
 				}
-				l("bad shito dick")
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write([]byte("Bad request"))
 			}
@@ -987,7 +964,7 @@ func RegisterValidationSubmit(w http.ResponseWriter, r *http.Request) {
 			l("no next")
 			// give token and write success
 			var sessionid string
-			err = Postgres_client.QueryRow(r.Context(), "INSERT INTO sessions(userid, refreshToken, email) VALUES ($1, $2, $3) RETURNING sessionid", userid, refreshToken, marshaled["email"]).Scan(&sessionid)
+			err = Postgres_client.QueryRow(r.Context(), "INSERT INTO sessions(userid, refreshToken, email) VALUES ($1, $2, $3) RETURNING sessionid", userid, sha256.Sum256(refreshToken), marshaled["email"]).Scan(&sessionid)
 			if err != nil {
 				Postgres_client.Exec(r.Context(), "DELETE FROM users WHERE userid=$1", userid)
 				w.WriteHeader(http.StatusInternalServerError)
@@ -1411,7 +1388,12 @@ func CaptchaToken(captchaData map[string]string, name string, endpoint string, e
 }
 
 func Verify(email string, name string, endpoint string, username string, password string, w http.ResponseWriter, r *http.Request) {
-	vcode := rnd.IntN(90000) + 10000
+	vcode, erio := rand.Int(rand.Reader, big.NewInt(90000))
+	if erio != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Server error"))
+		return
+	}
 	if username == "" {
 		sendCount, _ := Redis_client.Incr(r.Context(), "otp:"+email).Result()
 		if sendCount == 1 {
@@ -1433,7 +1415,7 @@ func Verify(email string, name string, endpoint string, username string, passwor
 
 	}
 
-	log.Println("The answer for verify is", vcode)
+	log.Println("The answer for verify is", vcode.Uint64()+10000)
 	go func() {
 		msg := []byte("To: " + email + "\r\n" +
 			"Subject: Shayegan's blog verification code\r\n" +
@@ -1449,7 +1431,7 @@ func Verify(email string, name string, endpoint string, username string, passwor
 	buff := make([]byte, 32)
 	rand.Read(buff)
 	tok := hex.EncodeToString(buff)
-	Redis_client.Set(r.Context(), tok+email, vcode, 2*time.Minute)
+	Redis_client.Set(r.Context(), tok+email, vcode.Uint64()+10000, 2*time.Minute)
 	//jwt
 	var jsonAnswer string
 	var jsonAnswerShould string

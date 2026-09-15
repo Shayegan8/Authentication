@@ -30,6 +30,12 @@ func SecurityHandlers(router http.Handler) http.Handler {
 			       "font-src 'self' https://fonts.gstatic.com; " +
 			       "frame-ancestors 'none';")
 		*/
+		w.Header().Set("Content-Security-Policy",
+			"default-src 'self'; "+
+				"style-src 'self' 'unsafe-inline'; "+
+				"img-src 'self' data: https:; "+
+				"frame-ancestors 'none';")
+
 		w.Header().Set("x-frame-options", "DENY") // click hijacking preventation
 		w.Header().Set("Strict-Transport-Security",
 			"max-age=31536000; includeSubDomains; preload") // https only
